@@ -5,6 +5,7 @@ import type { Product } from "../../types/product";
 import type { InventoryItem } from "../../types/inventory";
 import type { SafetyNotice } from "../../types/notice";
 import type { Match, ActionLog, ReviewStatus } from "../../types/match";
+import type { ActivityEvent, ActivityType } from "../../types/activity";
 
 const delay = <T>(v: T, ms = 300) => new Promise<T>((r) => setTimeout(() => r(v), ms));
 
@@ -39,6 +40,45 @@ export const getMatches = (params?: { status?: string }): Promise<Match[]> => {
 };
 export const getMatch = (id: string): Promise<Match | undefined> => delay(MATCHES.find((m) => m._id === id));
 export const getActionLogs = (matchId: string): Promise<ActionLog[]> => delay(ACTION_LOGS.filter((l) => l.match_id === matchId));
+const activityTypeForStatus = (status: ReviewStatus): ActivityType => {
+  if (status === "ESCALATED") return "ESCALATED";
+  if (status === "ACTION_RECORDED") return "ACTION_RECORDED";
+  if (status === "REVIEWED") return "REVIEWED";
+  return "STATUS_UPDATED";
+};
+const reviewDescription = (status: ReviewStatus): string => {
+  if (status === "ESCALATED") return "ส่งกรณีนี้เพื่อตรวจสอบเพิ่มเติม";
+  if (status === "ACTION_RECORDED") return "บันทึกการดำเนินการสำหรับกรณีนี้";
+  if (status === "REVIEWED") return "ตรวจสอบผลการจับคู่แล้ว";
+  return "อัปเดตสถานะการตรวจสอบ";
+};
+export const getActivity = (): Promise<ActivityEvent[]> => {
+  const detected: ActivityEvent[] = MATCHES
+    .filter((match) => match.match_status !== "NO_MATCH")
+    .map((match) => ({
+      _id: `detected-${match._id}`,
+      activity_type: "MATCH_DETECTED",
+      description: "ตรวจพบรายการสินค้าคงคลังที่อาจเกี่ยวข้องกับประกาศ",
+      occurred_at: match.checked_at,
+      match_id: match._id,
+      match,
+    }));
+  const actions: ActivityEvent[] = ACTION_LOGS.flatMap((log) => {
+    const match = MATCHES.find((entry) => entry._id === log.match_id);
+    if (!match) return [];
+    return [{
+      _id: log._id,
+      activity_type: activityTypeForStatus(log.status),
+      description: reviewDescription(log.status),
+      occurred_at: log.created_at,
+      match_id: match._id,
+      match,
+      new_status: log.status,
+      notes: log.action_note,
+    }];
+  });
+  return delay([...detected, ...actions].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
+};
 export const addActionLog = (matchId: string, status: ReviewStatus, note: string): Promise<ActionLog> => {
   const log: ActionLog = { _id: `log-${Date.now()}`, match_id: matchId, status, action_note: note, created_at: new Date().toISOString() };
   ACTION_LOGS.push(log);

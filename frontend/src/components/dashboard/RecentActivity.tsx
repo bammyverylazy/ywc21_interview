@@ -1,5 +1,5 @@
 import type { ActionLog } from "../../types/match";
-import { REVIEW_STATUS_LABEL, formatThaiDate } from "../../lib/th";
+import { formatThaiDate } from "../../lib/th";
 import { Skeleton } from "../ui/Skeleton";
 import { EmptyState } from "../feedback/EmptyState";
 import { Card } from "../ui/Card";

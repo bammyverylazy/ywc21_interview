@@ -4,7 +4,7 @@
 import * as mock from "./mock/index";
 import * as api  from "./api/index";
 
-const impl = import.meta.env.VITE_USE_MOCK === "false" ? api : mock;
+const impl = (import.meta.env.VITE_USE_MOCK === "false" ? api : mock) as typeof mock;
 
 export const getProducts        = impl.getProducts;
 export const getProduct         = impl.getProduct;
@@ -15,6 +15,7 @@ export const getNotice          = impl.getNotice;
 export const getMatches         = impl.getMatches;
 export const getMatch           = impl.getMatch;
 export const getActionLogs      = impl.getActionLogs;
+export const getActivity        = impl.getActivity;
 export const addActionLog       = impl.addActionLog;
 export const runMatching        = impl.runMatching;
 export const getDashboardSummary = impl.getDashboardSummary;
