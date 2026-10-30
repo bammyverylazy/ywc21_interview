@@ -12,6 +12,9 @@ export default {
     },
     fontFamily: { sans: ['"IBM Plex Sans Thai"', "system-ui", "sans-serif"] },
     borderRadius: { app: "10px", panel: "16px" },
+    spacing: { "4.5": "1.125rem" },
+    width:   { "4.5": "1.125rem" },
+    height:  { "4.5": "1.125rem" },
   } },
   plugins: [],
 };
