@@ -237,3 +237,83 @@ def test_scheduled_interval_skips_until_due_and_skips_do_not_reset_interval(fake
     assert skipped["status"] == "SKIPPED"
     assert not scheduled_sync_due(fake_db, 24, now=now)
     assert scheduled_sync_due(fake_db, 24, now=last_started + timedelta(hours=25))
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for Phase 6 coverage
+# ---------------------------------------------------------------------------
+
+from app.ingestion.thai_fda_source import SourceParsingError
+
+
+def test_invalid_source_response_fails_and_releases_lock(fake_db):
+    """A SourceParsingError on the listing level marks the run FAILED and
+    releases the lock so the next attempt is not blocked."""
+    result = run(fake_db, ListingSource(
+        error=SourceParsingError("FDA listing response was not valid JSON.")
+    ))
+
+    assert result["status"] == "FAILED"
+    assert "listing" in result["error_summary"].lower() or "json" in result["error_summary"].lower()
+    assert fake_db["sync_locks"].count_documents({}) == 0
+    assert fake_db["sync_logs"].count_documents({}) == 1
+
+
+def test_invalid_individual_record_is_failed_not_crash(fake_db):
+    """A malformed row (missing TR_ID) fails individually but the rest proceed."""
+    good = source_row()
+    bad = {"PROD_NAME": "ยาไม่มีรหัส"}  # Missing TR_ID and IDA/NEWCODE
+
+    result = run(fake_db, ListingSource([good, bad]))
+
+    # The good record succeeds; the bad one contributes to records_failed.
+    assert result["records_new"] == 1
+    assert result["records_failed"] >= 1
+    assert fake_db["sync_locks"].count_documents({}) == 0
+
+
+def test_sync_history_records_success_accurately(fake_db):
+    """A successful sync produces a sync_log with status SUCCESS and correct counters."""
+    result = run(fake_db, ListingSource([source_row()]))
+    log = fake_db["sync_logs"].find_one({"status": {"$in": ["SUCCESS", "PARTIAL_SUCCESS"]}})
+
+    assert log is not None
+    assert log["records_discovered"] == 1
+    assert log["records_new"] == 1
+    assert log["completed_at"] is not None
+    # Lock must be released after success.
+    assert fake_db["sync_locks"].count_documents({}) == 0
+
+
+def test_sync_history_records_failure_accurately(fake_db):
+    """A failed sync produces a sync_log with status FAILED, error_summary, and no lock."""
+    from app.ingestion.thai_fda_source import SourceRetrievalError
+    result = run(fake_db, ListingSource(error=SourceRetrievalError("timeout")))
+    log = fake_db["sync_logs"].find_one({"status": "FAILED"})
+
+    assert log is not None
+    assert log["error_summary"] is not None
+    assert log["completed_at"] is not None
+    assert fake_db["sync_locks"].count_documents({}) == 0
+
+
+def test_manually_verified_record_is_not_overwritten_by_sync(fake_db):
+    """Manually verified fields (title, published_at, lots) survive a sync cycle."""
+    from app.ingestion.import_service import import_records
+    row = source_row()
+    synced = normalize_listing_record(row)
+    verified = {
+        **synced,
+        "title": "ชื่อที่ตรวจสอบแล้ว",
+        "published_at": "2026-01-15",
+        "affected_lots": [{"lot_number": "VERIFIED-LOT-XYZ"}],
+    }
+    import_records(fake_db, [verified])
+
+    result = run(fake_db, ListingSource([row]))
+    saved = fake_db["safety_notices"].find_one({})
+
+    assert result["records_updated"] == 1
+    assert saved["title"] == "ชื่อที่ตรวจสอบแล้ว"
+    assert saved["affected_lots"][0]["lot_number"] == "VERIFIED-LOT-XYZ"
+    assert fake_db["safety_notices"].count_documents({}) == 1

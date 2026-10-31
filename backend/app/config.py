@@ -8,8 +8,15 @@ an obscure failure later.
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from dotenv import load_dotenv
+
+# Resolve the .env file relative to this source file so the backend can be
+# started from any working directory (project root, backend/, etc.) and still
+# read its configuration.  Real environment variables always win; load_dotenv
+# never overwrites them.
+_ENV_FILE = Path(__file__).parent.parent / ".env"
 
 
 class ConfigurationError(RuntimeError):
@@ -59,8 +66,9 @@ def _positive_float(name: str, default: float) -> float:
 
 @lru_cache
 def get_settings() -> Settings:
-    # Reads backend/.env if present. Real environment variables take precedence.
-    load_dotenv()
+    # Reads backend/.env relative to this file. Real environment variables take
+    # precedence (load_dotenv never overwrites an already-set variable).
+    load_dotenv(_ENV_FILE)
 
     mongodb_uri = _clean(os.getenv("MONGODB_URI"))
     if not mongodb_uri:

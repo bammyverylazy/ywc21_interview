@@ -23,6 +23,12 @@ async def lifespan(app: FastAPI):
     app.state.db = db
     app.state.mongo_client = client
 
+    logger.info(
+        "Thai FDA sync is %s (FDA_SYNC_ENABLED=%s)",
+        "ENABLED" if settings.fda_sync_enabled else "DISABLED — set FDA_SYNC_ENABLED=true to enable",
+        settings.fda_sync_enabled,
+    )
+
     # An unreachable database should not crash the app: /api/health reports it.
     try:
         ensure_indexes(db)

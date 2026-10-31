@@ -33,6 +33,26 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc(dt: datetime | None) -> datetime | None:
+    """Normalise a datetime to timezone-aware UTC.
+
+    PyMongo deserialises BSON UTC datetimes as *naive* ``datetime`` objects
+    (``tzinfo=None``).  The application generates *aware* UTC datetimes via
+    ``_now()``.  Comparing the two directly raises::
+
+        TypeError: can't compare offset-naive and offset-aware datetimes
+
+    This helper converts any naive datetime to explicit UTC before comparison,
+    leaves already-aware datetimes unchanged, and passes ``None`` through so
+    callers can chain ``_as_utc(value) <= _now()`` without a prior None-check.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _safe_detail(category: str, message: str, **fields: Any) -> dict[str, Any]:
     return {"category": category, "message": message, **fields}
 
@@ -191,9 +211,7 @@ def manual_sync_cooldown_remaining(
     if latest_accepted is None:
         return 0
 
-    started_at = latest_accepted["started_at"]
-    if started_at.tzinfo is None:
-        started_at = started_at.replace(tzinfo=timezone.utc)
+    started_at = _as_utc(latest_accepted["started_at"])
     remaining = started_at + MANUAL_SYNC_COOLDOWN - (now or _now())
     return max(0, int(remaining.total_seconds() + 0.999))
 
@@ -203,11 +221,9 @@ def sync_is_running(db: Database, *, now: datetime | None = None) -> bool:
     lock = db["sync_locks"].find_one({"_id": LOCK_ID})
     if lock is None:
         return False
-    expires_at = lock.get("lease_expires_at")
+    expires_at = _as_utc(lock.get("lease_expires_at"))
     if expires_at is None:
         return False
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
     return expires_at > (now or _now())
 
 
@@ -224,9 +240,7 @@ def scheduled_sync_due(
     last_run = next(iter(latest), None)
     if last_run is None:
         return True
-    last_started = last_run["started_at"]
-    if last_started.tzinfo is None:
-        last_started = last_started.replace(tzinfo=timezone.utc)
+    last_started = _as_utc(last_run["started_at"])
     return (now or _now()) - last_started >= timedelta(hours=interval_hours)
 
 
@@ -568,7 +582,7 @@ def get_status(db: Database) -> dict[str, Any]:
     last_run = next(iter(latest), None)
     if last_run and last_run.get("status") == "RUNNING":
         lock = db["sync_locks"].find_one({"_id": LOCK_ID, "run_id": str(last_run["_id"])})
-        if lock is None or lock.get("lease_expires_at") <= _now():
+        if lock is None or _as_utc(lock.get("lease_expires_at")) <= _now():
             db["sync_logs"].find_one_and_update(
                 {"_id": last_run["_id"], "status": "RUNNING"},
                 {"$set": {
