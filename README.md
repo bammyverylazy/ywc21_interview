@@ -1818,40 +1818,69 @@ Additional testing:
 
 **Goal:** Publish the application and make it accessible through a live URL.
 
+### Pre-deployment verification
+
+The latest Matching Engine implementation was reviewed and verified before
+deployment preparation:
+
+| Verification | Result |
+| --- | --- |
+| Backend test suite | 137 passed |
+| Atlas source records | 16 inventory items, 297 safety notices |
+| `POST /api/matches/run` | HTTP 200; 4,752 comparisons persisted |
+| Match results | 0 exact, 4,705 potential, 47 no match |
+| `GET /api/matches?skip=0&limit=200` | HTTP 200; 200 returned, 4,752 total |
+| Second matching run | Same counts; no duplicate pairs |
+| Match IDs and action history | Preserved on rerun |
+
+Matching persistence uses bulk upserts, and paginated retrieval batches related
+record enrichment. Matching criteria are unchanged; uncertain or missing LOT
+information is not promoted to an exact match.
+
 ### Backend Deployment — Render
 
-Tasks:
+Use the repository's `render.yaml` Blueprint to create the backend web service.
+It sets the backend root directory, install/start commands, and `/api/health`
+health check. During setup, provide:
 
-- Connect GitHub repository.
-- Configure backend root directory.
-- Configure build and start commands.
-- Set environment variables.
-- Configure MongoDB Atlas network access.
-- Configure CORS.
-- Deploy backend.
-- Verify health endpoint.
-- Verify Swagger UI.
+- `MONGODB_URI`: the rotated MongoDB Atlas connection string, stored as a secret.
+- `DATABASE_NAME`: the intended production database name.
+- `FRONTEND_URL`: the exact deployed Vercel origin, including `https://` and
+  without a trailing slash.
+- `ENVIRONMENT=production` (set by the Blueprint).
+- `FDA_SYNC_ENABLED=false` initially (set by the Blueprint); enable scheduled
+  source synchronization only after reviewing its production behavior.
+
+The backend allows `FRONTEND_URL` and any additional comma-separated origins in
+`CORS_ORIGINS`. Add only trusted production origins; do not use `*`. Configure
+MongoDB Atlas network access for the Render service, then verify `/api/health`
+reports both the API and database as connected and confirm `/docs` loads.
 
 ### Frontend Deployment — Vercel
 
-Tasks:
+Import the repository into Vercel with `frontend` as the root directory. Use
+`npm run build` as the build command and `dist` as the output directory. Set
+these frontend environment variables for the Production environment:
 
-- Connect GitHub repository.
-- Configure frontend root directory.
-- Set production API base URL.
-- Deploy frontend.
-- Verify API communication.
-- Test the live application.
+- `VITE_API_BASE_URL=https://<render-service>.onrender.com/api`
+- `VITE_USE_MOCK=false`
+
+Replace the example host with the URL assigned to the Render service. Deploy the
+backend first to obtain that URL, then deploy the frontend and set `FRONTEND_URL`
+on Render to the final Vercel production origin. If using a custom frontend
+domain, add it to `CORS_ORIGINS` as well. Redeploy/restart the backend after
+changing its environment variables, then verify API communication and the live
+application.
 
 ### MongoDB Atlas
 
-Tasks:
-
-- Use the correct production connection string.
-- Create a database user with appropriate permissions.
-- Restrict network access as appropriate.
-- Do not commit credentials.
-- Verify production database connectivity.
+Use a production database user with only the permissions the app needs and
+restrict network access to the Render service. Never put MongoDB credentials in
+Git or frontend environment variables. A credential-bearing MongoDB URI was
+found in the tracked `backend/.env.example` and replaced with a placeholder;
+because the old value is present in Git history, rotate/revoke that credential
+and consider removing it from repository history before making the repository
+public or deploying. Verify production connectivity through `/api/health`.
 
 **Deliverables:**
 

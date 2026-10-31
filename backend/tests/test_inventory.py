@@ -11,8 +11,8 @@ Coverage:
 The fake_db fixture from conftest.py is used so no real MongoDB is needed.
 """
 
-import pytest
 from bson import ObjectId
+from datetime import datetime, timezone
 
 
 def _create_product(client) -> dict:
@@ -57,6 +57,28 @@ def test_create_inventory_item_with_expiry_date(client):
     product = _create_product(client)
     item = _create_item(client, product["id"], expiry_date="2028-06-30")
     assert item["expiry_date"] == "2028-06-30"
+
+
+def test_create_inventory_item_persists_utc_datetime_and_reads_same_date(client, fake_db):
+    product = _create_product(client)
+    item = _create_item(client, product["id"], expiry_date="2028-12-31")
+    stored = fake_db["inventory_items"].find_one({"_id": ObjectId(item["id"])})
+    assert stored["expiry_date"] == datetime(2028, 12, 31, tzinfo=timezone.utc)
+    assert client.get(f"/api/inventory/{item['id']}").json()["expiry_date"] == "2028-12-31"
+
+
+def test_create_inventory_item_with_null_expiry_date(client, fake_db):
+    product = _create_product(client)
+    item = _create_item(client, product["id"], expiry_date=None)
+    stored = fake_db["inventory_items"].find_one({"_id": ObjectId(item["id"])})
+    assert stored["expiry_date"] is None
+    assert item["expiry_date"] is None
+
+
+def test_invalid_expiry_date_returns_422(client):
+    product = _create_product(client)
+    response = client.post("/api/inventory", json={"product_id": product["id"], "quantity": 1, "expiry_date": "2028-02-30"})
+    assert response.status_code == 422
 
 
 def test_create_inventory_item_nonexistent_product_returns_422(client):
@@ -181,6 +203,29 @@ def test_update_inventory_item_lot_number(client):
     resp = client.put(f"/api/inventory/{created['id']}", json={"lot_number": "NEW"})
     assert resp.status_code == 200
     assert resp.json()["lot_number"] == "NEW"
+
+
+def test_update_inventory_item_expiry_date_persists_utc_and_reads_same_date(client, fake_db):
+    product = _create_product(client)
+    created = _create_item(client, product["id"])
+    response = client.put(f"/api/inventory/{created['id']}", json={"expiry_date": "2028-12-31"})
+    assert response.status_code == 200
+    assert response.json()["expiry_date"] == "2028-12-31"
+    stored = fake_db["inventory_items"].find_one({"_id": ObjectId(created["id"])})
+    assert stored["expiry_date"] == datetime(2028, 12, 31, tzinfo=timezone.utc)
+
+
+def test_existing_mongo_datetime_is_read_as_calendar_date(client, fake_db):
+    product = _create_product(client)
+    inserted = fake_db["inventory_items"].insert_one({
+        "product_id": ObjectId(product["id"]), "lot_number": "LEGACY", "quantity": 1,
+        "expiry_date": datetime(2028, 12, 31, 23, 0), "is_demo": False,
+        "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+        "updated_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+    })
+    detail = client.get(f"/api/inventory/{inserted.inserted_id}")
+    assert detail.status_code == 200
+    assert detail.json()["expiry_date"] == "2028-12-31"
 
 
 def test_update_inventory_item_not_found(client):

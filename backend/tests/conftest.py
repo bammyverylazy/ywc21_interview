@@ -26,6 +26,7 @@ import pytest
 from bson import ObjectId
 from fastapi.testclient import TestClient
 from pymongo.errors import DuplicateKeyError
+from pymongo import UpdateOne
 
 from app.dependencies import get_db
 from app.main import create_app
@@ -147,6 +148,16 @@ class FakeCollection:
             doc["_id"] = ObjectId()
         self._docs.append(copy.deepcopy(doc))
         return FakeInsertOneResult(doc["_id"])
+
+    def bulk_write(self, requests: list, ordered: bool = True):
+        for request in requests:
+            if not isinstance(request, UpdateOne):
+                raise TypeError(f"Unsupported bulk operation: {type(request).__name__}")
+            self.find_one_and_update(
+                request._filter,
+                request._doc,
+                upsert=request._upsert,
+            )
 
     def find(self, query: dict = None, projection: dict = None) -> FakeCursor:
         query = query or {}

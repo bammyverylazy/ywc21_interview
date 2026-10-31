@@ -17,6 +17,7 @@ from app.schemas.match import (
 )
 from app.schemas.pagination import PaginatedResponse
 from app.services import matching_service
+from app.utils.object_id import parse_object_id
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 
@@ -46,11 +47,14 @@ def list_matches(
 
 
 @router.post("/run", response_model=MatchRunResult)
-def run_matching(data: MatchRunRequest, db: Database = Depends(get_db)):
-    inventory_id = data.inventory_id if data.scope == "SINGLE_INVENTORY_ITEM" else None
+def run_matching(data: Optional[MatchRunRequest] = None, db: Database = Depends(get_db)):
+    scope = data.scope if data else "ALL"
+    inventory_id = data.inventory_id if data and scope == "SINGLE_INVENTORY_ITEM" else None
+    if scope == "SINGLE_INVENTORY_ITEM" and inventory_id:
+        inventory = db["inventory_items"].find_one({"_id": parse_object_id(inventory_id)})
+        if inventory is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found.")
     result = matching_service.run_matching(db, inventory_id=inventory_id)
-    if data.scope == "SINGLE_INVENTORY_ITEM" and result["total_checked"] == 0:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found.")
     return result
 
 

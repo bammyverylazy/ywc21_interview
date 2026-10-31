@@ -44,7 +44,9 @@ def seed_demo_inventory(db: Database) -> dict[str, Any]:
                 "product_id": product["_id"],
                 "lot_number": "DEMO-ONLY-NOT-A-REAL-LOT",
                 "quantity": 10,
-                "expiry_date": date.today() + timedelta(days=365),
+                "expiry_date": datetime.combine(
+                    date.today() + timedelta(days=365), datetime.min.time(), tzinfo=timezone.utc
+                ),
                 "is_demo": True,
                 "created_at": now,
                 "updated_at": now,

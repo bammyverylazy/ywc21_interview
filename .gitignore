@@ -75,6 +75,7 @@ lerna-debug.log*
 .output/
 .turbo/
 coverage/
+*.tsbuildinfo
 
 # Keep package manager lockfiles; they ensure reproducible installs.
 

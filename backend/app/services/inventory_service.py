@@ -5,8 +5,7 @@ Design decisions:
 - product_id is stored as an ObjectId in MongoDB (proper reference).
 - Responses embed a lightweight product summary so the UI can render a list
   row without a second request.
-- expiry_date is stored as a Python date object (BSON date without time
-  component). Pydantic serialises it to "YYYY-MM-DD" in the response.
+- expiry_date is stored as midnight UTC in MongoDB and exposed as YYYY-MM-DD.
 """
 
 from __future__ import annotations
@@ -25,6 +24,31 @@ from app.utils.object_id import doc_to_dict, parse_object_id
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _date_to_mongo_datetime(value: date | datetime | None) -> datetime | None:
+    """Store calendar dates at midnight UTC without shifting their date."""
+    if isinstance(value, datetime):
+        # Preserve the represented calendar date. MongoDB dates are UTC; a
+        # timezone offset conversion here could move an expiry to another day.
+        return value.replace(tzinfo=timezone.utc)
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time(), tzinfo=timezone.utc)
+    return None
+
+
+def _date_from_mongo_datetime(value: date | datetime | None) -> date | None:
+    """Expose the UTC calendar date from BSON datetime values."""
+    if isinstance(value, datetime):
+        # Preserve the datetime's represented calendar date. PyMongo commonly
+        # returns naive UTC values; aware values must not shift the day here.
+        return value.date()
+    return value if isinstance(value, date) else None
+
+
+def _normalize_inventory_dates(item: dict) -> dict:
+    item["expiry_date"] = _date_from_mongo_datetime(item.get("expiry_date"))
+    return item
 
 
 def _enrich_with_product(db: Database, item: dict) -> dict:
@@ -74,14 +98,14 @@ def create_inventory_item(db: Database, data: InventoryCreate) -> dict:
         "product_id": product_oid,
         "lot_number": data.lot_number,
         "quantity": data.quantity,
-        "expiry_date": data.expiry_date,  # Python date or None
+        "expiry_date": _date_to_mongo_datetime(data.expiry_date),
         "is_demo": data.is_demo,
         "created_at": now,
         "updated_at": now,
     }
     result = db["inventory_items"].insert_one(doc)
     doc["_id"] = result.inserted_id
-    item = doc_to_dict(doc)
+    item = _normalize_inventory_dates(doc_to_dict(doc))
     return _enrich_with_product(db, item)
 
 
@@ -137,7 +161,7 @@ def list_inventory_items(
         .skip(skip)
         .limit(limit)
     )
-    items = [_enrich_with_product(db, doc_to_dict(doc)) for doc in cursor]
+    items = [_enrich_with_product(db, _normalize_inventory_dates(doc_to_dict(doc))) for doc in cursor]
     return items, total
 
 
@@ -150,7 +174,7 @@ def get_inventory_item(db: Database, item_id: str) -> dict:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Inventory item '{item_id}' not found.",
         )
-    item = doc_to_dict(doc)
+    item = _normalize_inventory_dates(doc_to_dict(doc))
     return _enrich_with_product(db, item)
 
 
@@ -158,6 +182,8 @@ def update_inventory_item(db: Database, item_id: str, data: InventoryUpdate) -> 
     """Apply a partial update and return the updated document."""
     oid = parse_object_id(item_id)
     changes = data.non_none_fields()
+    if "expiry_date" in changes:
+        changes["expiry_date"] = _date_to_mongo_datetime(changes["expiry_date"])
     if not changes:
         return get_inventory_item(db, item_id)
 
@@ -172,7 +198,7 @@ def update_inventory_item(db: Database, item_id: str, data: InventoryUpdate) -> 
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Inventory item '{item_id}' not found.",
         )
-    item = doc_to_dict(result)
+    item = _normalize_inventory_dates(doc_to_dict(result))
     return _enrich_with_product(db, item)
 
 

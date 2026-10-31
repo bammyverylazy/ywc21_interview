@@ -7,6 +7,7 @@ from typing import Any
 
 from bson import ObjectId
 from fastapi import HTTPException, status
+from pymongo import UpdateOne
 from pymongo.database import Database
 
 from app.schemas.match import MatchStatus, ReviewStatus
@@ -136,20 +137,55 @@ def evaluate_pair(inventory: dict, notice: dict) -> dict:
     }
 
 
+def _enrich_matches(db: Database, matches: list[dict]) -> list[dict]:
+    if not matches:
+        return []
+
+    inventory_ids = {match["inventory_id"] for match in matches}
+    notice_ids = {match["notice_id"] for match in matches}
+    inventory_docs = list(db["inventory_items"].find({"_id": {"$in": list(inventory_ids)}}))
+    notice_docs = list(db["safety_notices"].find({"_id": {"$in": list(notice_ids)}}))
+    product_ids = {
+        inventory["product_id"]
+        for inventory in inventory_docs
+        if inventory.get("product_id") is not None
+    }
+    product_docs = list(db["products"].find({"_id": {"$in": list(product_ids)}})) if product_ids else []
+    actions = db["action_logs"].find(
+        {"match_id": {"$in": [match["_id"] for match in matches]}}
+    ).sort("created_at", -1)
+
+    inventories_by_id = {inventory["_id"]: inventory for inventory in inventory_docs}
+    notices_by_id = {notice["_id"]: notice for notice in notice_docs}
+    products_by_id = {product["_id"]: product for product in product_docs}
+    latest_actions = {}
+    for action in actions:
+        latest_actions.setdefault(action["match_id"], action)
+
+    enriched = []
+    for match in matches:
+        inventory_doc = inventories_by_id.get(match["inventory_id"])
+        if inventory_doc:
+            inventory_doc = {
+                **inventory_doc,
+                "product": doc_to_dict(
+                    products_by_id.get(inventory_doc.get("product_id"))
+                ) if inventory_doc.get("product_id") in products_by_id else None,
+            }
+        match["inventory"] = doc_to_dict(inventory_doc) if inventory_doc else None
+        match["notice"] = doc_to_dict(notices_by_id.get(match["notice_id"]))
+        action = latest_actions.get(match["_id"])
+        match["review_status"] = (
+            action.get("status", ReviewStatus.PENDING.value)
+            if action
+            else ReviewStatus.PENDING.value
+        )
+        enriched.append(doc_to_dict(match))
+    return enriched
+
+
 def _enrich_match(db: Database, match: dict) -> dict:
-    inventory_doc = db["inventory_items"].find_one({"_id": match["inventory_id"]})
-    notice_doc = db["safety_notices"].find_one({"_id": match["notice_id"]})
-    if inventory_doc:
-        product_doc = db["products"].find_one({"_id": inventory_doc.get("product_id")})
-        inventory_doc["product"] = doc_to_dict(product_doc) if product_doc else None
-        match["inventory"] = doc_to_dict(inventory_doc)
-    else:
-        match["inventory"] = None
-    match["notice"] = doc_to_dict(notice_doc) if notice_doc else None
-    latest_action = db["action_logs"].find({"match_id": match["_id"]}).sort("created_at", -1).limit(1)
-    action = next(iter(latest_action), None)
-    match["review_status"] = action.get("status", ReviewStatus.PENDING.value) if action else ReviewStatus.PENDING.value
-    return doc_to_dict(match)
+    return _enrich_matches(db, [match])[0]
 
 
 def run_matching(db: Database, inventory_id: str | None = None) -> dict:
@@ -158,12 +194,17 @@ def run_matching(db: Database, inventory_id: str | None = None) -> dict:
         inventory_query["_id"] = parse_object_id(inventory_id)
     inventory_items = list(db["inventory_items"].find(inventory_query))
     notices = list(db["safety_notices"].find({}))
+    product_ids = {item["product_id"] for item in inventory_items if item.get("product_id") is not None}
+    products = list(db["products"].find({"_id": {"$in": list(product_ids)}})) if product_ids else []
+    products_by_id = {product["_id"]: product for product in products}
+
     now = datetime.now(timezone.utc)
     counts = {item.value: 0 for item in MatchStatus}
     checked = 0
+    operations = []
 
     for inventory_raw in inventory_items:
-        product_raw = db["products"].find_one({"_id": inventory_raw.get("product_id")})
+        product_raw = products_by_id.get(inventory_raw.get("product_id"))
         inventory = {**inventory_raw, "product": product_raw}
         for notice in notices:
             result = evaluate_pair(inventory, notice)
@@ -171,24 +212,18 @@ def run_matching(db: Database, inventory_id: str | None = None) -> dict:
                 "inventory_id": inventory_raw["_id"],
                 "notice_id": notice["_id"],
             }
-            existing = db["matches"].find_one(identity_query)
             document = {
                 **identity_query,
                 **result,
                 "checked_at": now,
                 "matching_version": MATCHING_VERSION,
             }
-            if existing:
-                # Preserve the match identifier and review trail while refreshing current comparison.
-                db["matches"].find_one_and_update(
-                    {"_id": existing["_id"]},
-                    {"$set": document},
-                    return_document=True,
-                )
-            else:
-                db["matches"].insert_one(document)
+            operations.append(UpdateOne(identity_query, {"$set": document}, upsert=True))
             counts[result["match_status"]] += 1
             checked += 1
+
+    if operations:
+        db["matches"].bulk_write(operations, ordered=False)
 
     return {
         "total_checked": checked,
@@ -219,8 +254,13 @@ def list_matches(
             item["_id"] for item in db["inventory_items"].find({"product_id": parse_object_id(product_id)})
         ]
         query["inventory_id"] = {"$in": inventory_ids}
-    docs = list(db["matches"].find(query).sort("checked_at", -1))
-    matches = [_enrich_match(db, doc) for doc in docs]
+    cursor = db["matches"].find(query).sort("checked_at", -1)
+    if review_status is None and search is None:
+        docs = list(cursor.skip(skip).limit(limit))
+        total = db["matches"].count_documents(query)
+        return _enrich_matches(db, docs), total
+
+    matches = _enrich_matches(db, list(cursor))
     if review_status:
         matches = [match for match in matches if match["review_status"] == review_status]
     if search:
