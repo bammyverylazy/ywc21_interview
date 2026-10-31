@@ -1,11 +1,38 @@
 from bson import ObjectId
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from app.dependencies import get_db
 from app.main import create_app
+from app.services import dashboard_service
 from app.services import matching_service
 from app.services.matching_service import evaluate_pair, run_matching
+
+
+class SingleUseCursor:
+    def __init__(self, cursor):
+        self.cursor = cursor
+        self.consumed = False
+
+    def sort(self, *args, **kwargs):
+        self.cursor.sort(*args, **kwargs)
+        return self
+
+    def skip(self, count):
+        if self.consumed:
+            raise RuntimeError("Cannot change cursor options after iteration")
+        self.cursor.skip(count)
+        return self
+
+    def limit(self, count):
+        if self.consumed:
+            raise RuntimeError("Cannot change cursor options after iteration")
+        self.cursor.limit(count)
+        return self
+
+    def __iter__(self):
+        self.consumed = True
+        return iter(self.cursor)
 
 
 def test_exact_match_requires_strong_identity_and_affected_lot():
@@ -169,6 +196,41 @@ def test_match_action_activity_and_dashboard_api_flow(client, fake_db):
     assert fake_db["matches"].count_documents({}) == 1
     assert fake_db["matches"].find_one({})["_id"] == ObjectId(match["id"])
     assert len(client.get(f"/api/matches/{match['id']}/actions").json()) == 1
+
+
+def test_attention_items_uses_fresh_cursors_for_multiple_batches(fake_db, monkeypatch):
+    matches = fake_db["matches"]
+    original_find = matches.find
+    monkeypatch.setattr(
+        matches,
+        "find",
+        lambda query=None, projection=None: SingleUseCursor(
+            original_find(query, projection)
+        ),
+    )
+    now = datetime.now(timezone.utc)
+    match_ids = []
+    for index in range(101):
+        match_id = ObjectId()
+        match_ids.append(match_id)
+        fake_db["matches"].insert_one({
+            "_id": match_id,
+            "inventory_id": ObjectId(),
+            "notice_id": ObjectId(),
+            "match_status": "POTENTIAL_MATCH",
+            "checked_at": now - timedelta(minutes=index),
+        })
+        if index < 100:
+            fake_db["action_logs"].insert_one({
+                "match_id": match_id,
+                "status": "REVIEWED",
+                "created_at": now - timedelta(minutes=index),
+            })
+
+    result = dashboard_service.attention_items(fake_db, limit=1)
+
+    assert len(result) == 1
+    assert result[0]["id"] == str(match_ids[100])
 
 
 def test_match_run_rejects_invalid_scope_and_missing_single_item_id(client):

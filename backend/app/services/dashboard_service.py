@@ -48,13 +48,18 @@ def attention_items(db: Database, limit: int = 20) -> list[dict]:
             "$in": [MatchStatus.EXACT_MATCH.value, MatchStatus.POTENTIAL_MATCH.value]
         }
     }
-    cursor = db["matches"].find(query).sort("checked_at", -1)
     needs_attention = []
     offset = 0
     batch_size = max(100, limit * 5)
 
     while len(needs_attention) < limit:
-        match_docs = list(cursor.skip(offset).limit(batch_size))
+        match_docs = list(
+            db["matches"]
+            .find(query)
+            .sort("checked_at", -1)
+            .skip(offset)
+            .limit(batch_size)
+        )
         if not match_docs:
             break
         match_ids = [match["_id"] for match in match_docs]
