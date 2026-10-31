@@ -1,6 +1,6 @@
 # YaSafe
 ## Medicine Recall & Safety Monitoring System for Independent Pharmacies
-
+(presentation for this proj💌)[https://canva.link/xpdcc1oitawaz5d]
 > **Project Blueprint | Technical Specification | Database Design | User Flow | Development Roadmap**
 
 **Project Name:** YaSafe  
