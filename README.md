@@ -1,9 +1,9 @@
-# LotShield
+# YaSafe
 ## Medicine Recall & Safety Monitoring System for Independent Pharmacies
 
 > **Project Blueprint | Technical Specification | Database Design | User Flow | Development Roadmap**
 
-**Project Name:** LotShield  
+**Project Name:** YaSafe  
 **Project Type:** Full-stack Web Application  
 **Target Users:** Independent Pharmacies / Pharmacy Staff  
 **Primary Goal:** Help independent pharmacies identify potentially affected medicines in their inventory by comparing inventory records against official medicine safety alerts and recall notices.
@@ -15,15 +15,15 @@
 
 # 1. Project Overview
 
-## 1.1 What is LotShield?
+## 1.1 What is YaSafe?
 
-LotShield is a web-based medicine recall and safety monitoring system designed for independent pharmacies.
+YaSafe is a web-based medicine recall and safety monitoring system designed for independent pharmacies.
 
 The system helps pharmacy staff monitor official medicine safety announcements and identify whether products currently stored in their inventory may be affected by those announcements.
 
 Pharmacies can maintain their medicine inventory, review official safety notices, and run a matching process that compares product registration numbers, product identities, and batch/lot numbers.
 
-When a potential match is detected, LotShield displays the relevant information and provides an evidence-based explanation so that pharmacy staff can review the result and record their actions.
+When a potential match is detected, YaSafe displays the relevant information and provides an evidence-based explanation so that pharmacy staff can review the result and record their actions.
 
 The system aims to make safety notice monitoring more organized, traceable, and manageable, particularly for smaller pharmacies that may not have dedicated inventory monitoring systems.
 
@@ -44,7 +44,7 @@ The problem is not simply the lack of access to safety announcements. It is the 
 
 ## 1.3 Proposed Solution
 
-LotShield provides a centralized workflow with five core capabilities:
+YaSafe provides a centralized workflow with five core capabilities:
 
 1. **Inventory Management** — Maintain a record of medicines and their batch information.
 2. **Safety Notice Monitoring** — Store and review official medicine safety announcements.
@@ -194,7 +194,7 @@ This module stores and displays official medicine safety announcements.
 - Publication date.
 - Source organization.
 - Original source URL.
-- Date imported into LotShield.
+- Date imported into YaSafe.
 
 **Data source requirements:**
 
@@ -219,7 +219,7 @@ Never create fictional safety notices and present them as real official announce
 
 ### Feature 4: Matching Engine
 
-This is the core business logic of LotShield.
+This is the core business logic of YaSafe.
 
 The matching engine compares inventory records with safety notice records to identify potentially affected medicine batches.
 
@@ -346,7 +346,7 @@ This module allows pharmacy staff to investigate matching results and record fol
 - Separated affected inventory pending verification.
 - Referred the matter to the responsible pharmacist.
 
-These are examples of records, not automated instructions from LotShield.
+These are examples of records, not automated instructions from YaSafe.
 
 The system must not automatically instruct users to destroy, withdraw, or dispense medicines.
 
@@ -358,7 +358,7 @@ The system must not automatically instruct users to destroy, withdraw, or dispen
 
 The intended user journey is:
 
-1. User opens LotShield.
+1. User opens YaSafe.
 2. User views the Dashboard.
 3. User adds or updates inventory.
 4. User opens Safety Alerts.
@@ -374,7 +374,7 @@ The intended user journey is:
 
 ```mermaid
 flowchart TD
-    A([Start]) --> B[Open LotShield]
+    A([Start]) --> B[Open YaSafe]
     B --> C[Dashboard]
     C --> D{What does the user want to do?}
 
@@ -525,7 +525,7 @@ flowchart TD
 
 ## 4.1 Architecture Overview
 
-LotShield uses a three-layer architecture:
+YaSafe uses a three-layer architecture:
 
 1. Frontend — User interface and interaction.
 2. Backend — Business logic, API endpoints, validation, and database access.
@@ -639,7 +639,7 @@ All database access must happen through the backend.
 
 The initial external information source is official Thai FDA medicine safety information.
 
-The backend's import service is responsible for bringing verified notice information into LotShield.
+The backend's import service is responsible for bringing verified notice information into YaSafe.
 
 The initial implementation may use manually curated/admin-assisted imports.
 
@@ -772,7 +772,7 @@ backend/
 
 **Driver:** PyMongo
 
-**Database name:** `lotshield_db`
+**Database name:** `YaSafe_db`
 
 MongoDB is selected because its document-based structure allows flexible storage of notice information, where fields may vary depending on the original official announcement.
 
@@ -826,7 +826,7 @@ The objective is to deliver one complete, functional workflow rather than a larg
 Database name:
 
 ```text
-lotshield_db
+YaSafe_db
 ```
 
 Collections:
@@ -1175,7 +1175,7 @@ Expected response:
 ```json
 {
   "status": "ok",
-  "service": "LotShield API"
+  "service": "YaSafe API"
 }
 ```
 
@@ -1340,7 +1340,7 @@ The UI should provide a direct link to the original source.
 
 ## 8.4 Safety and Limitations
 
-LotShield is a monitoring and decision-support application.
+YaSafe is a monitoring and decision-support application.
 
 It must not:
 
@@ -1354,7 +1354,7 @@ It must not:
 
 Display a clear disclaimer:
 
-"LotShield is a monitoring and decision-support tool. Matching results depend on the completeness and accuracy of the available inventory and official notice data. A result of No Match Found does not guarantee that a medicine is safe. Please verify relevant information against the original official announcement and consult the responsible pharmacist or relevant authority."
+"YaSafe is a monitoring and decision-support tool. Matching results depend on the completeness and accuracy of the available inventory and official notice data. A result of No Match Found does not guarantee that a medicine is safe. Please verify relevant information against the original official announcement and consult the responsible pharmacist or relevant authority."
 
 ---
 
@@ -1417,7 +1417,7 @@ Every major page should support:
 
 The final user-facing application must be entirely in **Thai**.
 
-LotShield is designed for independent pharmacies in Thailand. Therefore, the interface should use clear, natural, professional Thai language that is easy for pharmacy staff to understand.
+YaSafe is designed for independent pharmacies in Thailand. Therefore, the interface should use clear, natural, professional Thai language that is easy for pharmacy staff to understand.
 
 ### Language Requirements by Layer
 
@@ -1482,7 +1482,7 @@ Before implementing each page, define its Thai UI text and terminology consisten
 The project should use one GitHub repository.
 
 ```text
-lotshield/
+YaSafe/
 │
 ├── frontend/
 │   ├── public/
@@ -1520,7 +1520,7 @@ Create `backend/.env.example`:
 
 ```env
 MONGODB_URI=
-DATABASE_NAME=lotshield_db
+DATABASE_NAME=YaSafe_db
 FRONTEND_URL=http://localhost:5173
 ENVIRONMENT=development
 ```
@@ -2081,13 +2081,13 @@ All implementation work should follow these principles.
 
 # 17. Instructions for AI-Assisted Development
 
-This section is intended for Claude or another AI coding assistant working on LotShield.
+This section is intended for Claude or another AI coding assistant working on YaSafe.
 
 ## 17.1 Role
 
 Act as a senior full-stack software engineer and technical mentor.
 
-Your responsibilities are to help design, implement, debug, and improve LotShield while explaining the reasoning behind important technical decisions.
+Your responsibilities are to help design, implement, debug, and improve YaSafe while explaining the reasoning behind important technical decisions.
 
 Do not treat the project as a task where the objective is simply to generate as much code as possible.
 
@@ -2208,7 +2208,7 @@ The first technical milestone is a running backend that can connect to MongoDB A
 
 # 19. Project Summary
 
-LotShield is a full-stack medicine recall and safety monitoring application designed to help independent pharmacies connect official medicine safety notices with their existing inventory.
+YaSafe is a full-stack medicine recall and safety monitoring application designed to help independent pharmacies connect official medicine safety notices with their existing inventory.
 
 Its central workflow is:
 
@@ -2228,7 +2228,7 @@ The project demonstrates:
 
 The MVP's success should be measured by whether a user can complete the entire monitoring and review workflow reliably, not by the number of features included.
 
-**LotShield — Making Medicine Safety Monitoring More Traceable and Manageable.**
+**YaSafe — Making Medicine Safety Monitoring More Traceable and Manageable.**
 
 ---
 

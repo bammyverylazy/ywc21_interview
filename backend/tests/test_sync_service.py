@@ -21,7 +21,7 @@ from app.ingestion.thai_fda_source import SourceRetrievalError, normalize_listin
 def make_settings():
     return Settings(
         mongodb_uri="mongodb://localhost",
-        database_name="lotshield_test",
+        database_name="YaSafe_test",
         frontend_url="http://localhost:5173",
         cors_origins=("http://localhost:5173",),
         environment="test",

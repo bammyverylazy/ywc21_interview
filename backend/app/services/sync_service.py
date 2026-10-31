@@ -22,7 +22,7 @@ from app.ingestion.thai_fda_source import (
     normalize_listing_record,
 )
 
-logger = logging.getLogger("lotshield.sync")
+logger = logging.getLogger("YaSafe.sync")
 LOCK_ID = "thai-fda-drug-alert"
 LOCK_LEASE = timedelta(minutes=30)
 MANUAL_SYNC_COOLDOWN = timedelta(seconds=60)

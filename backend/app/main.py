@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.database import create_client, ensure_indexes
 from app.routers import activity, dashboard, health, inventory, matches, notices, products, sync
 
-logger = logging.getLogger("lotshield")
+logger = logging.getLogger("YaSafe")
 
 
 @asynccontextmanager
@@ -48,7 +48,7 @@ async def test_lifespan(app: FastAPI):
 
 def create_app(*, manage_database: bool = True) -> FastAPI:
     app = FastAPI(
-        title="LotShield API",
+        title="YaSafe API",
         description="Medicine recall and safety monitoring for independent pharmacies.",
         version="1.0.0",
         lifespan=lifespan if manage_database else test_lifespan,

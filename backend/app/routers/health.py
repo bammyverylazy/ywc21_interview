@@ -7,11 +7,11 @@ from pymongo.database import Database
 from app.database import ping_database
 from app.dependencies import get_db
 
-logger = logging.getLogger("lotshield.health")
+logger = logging.getLogger("YaSafe.health")
 
 router = APIRouter(tags=["health"])
 
-SERVICE_NAME = "LotShield API"
+SERVICE_NAME = "YaSafe API"
 
 
 @router.get("/health")

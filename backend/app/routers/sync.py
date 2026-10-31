@@ -13,7 +13,7 @@ from app.schemas.sync import SyncRunOut, SyncStatusOut, SyncTriggerOut
 from app.services import sync_service
 
 router = APIRouter(prefix="/sync", tags=["synchronization"])
-logger = logging.getLogger("lotshield.sync.api")
+logger = logging.getLogger("YaSafe.sync.api")
 
 
 @router.get("/status", response_model=SyncStatusOut)

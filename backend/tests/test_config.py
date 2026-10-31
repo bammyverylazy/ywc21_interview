@@ -41,7 +41,7 @@ def test_defaults_applied_when_optional_vars_missing(monkeypatch):
     settings = get_settings()
 
     assert settings.mongodb_uri == "mongodb://localhost:27017"
-    assert settings.database_name == "lotshield_db"
+    assert settings.database_name == "YaSafe_db"
     assert settings.frontend_url == "http://localhost:5173"
     assert settings.environment == "development"
     assert settings.fda_sync_detail_enrichment_enabled is True

@@ -1,6 +1,6 @@
 """MongoDB connection and index setup.
 
-LotShield uses synchronous PyMongo with synchronous route handlers. Do not mix in
+YaSafe uses synchronous PyMongo with synchronous route handlers. Do not mix in
 the async PyMongo API without a clear reason.
 """
 
@@ -11,7 +11,7 @@ from pymongo.database import Database
 
 from app.config import Settings
 
-logger = logging.getLogger("lotshield.database")
+logger = logging.getLogger("YaSafe.database")
 
 # (collection, field, direction) - matches the recommended indexes in README 6.8.
 INDEXES: list[tuple[str, str, int]] = [

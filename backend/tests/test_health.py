@@ -12,7 +12,7 @@ def test_health_ok_when_database_reachable(make_client):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["service"] == "LotShield API"
+    assert body["service"] == "YaSafe API"
     assert body["database"] == "connected"
 
 

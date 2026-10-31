@@ -85,7 +85,7 @@ def get_settings() -> Settings:
     )
     return Settings(
         mongodb_uri=mongodb_uri,
-        database_name=_clean(os.getenv("DATABASE_NAME")) or "lotshield_db",
+        database_name=_clean(os.getenv("DATABASE_NAME")) or "YaSafe_db",
         frontend_url=frontend_url,
         cors_origins=tuple(dict.fromkeys((frontend_url, *extra_origins))),
         environment=_clean(os.getenv("ENVIRONMENT")) or "development",

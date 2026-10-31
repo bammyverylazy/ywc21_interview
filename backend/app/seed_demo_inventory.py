@@ -23,7 +23,7 @@ def seed_demo_inventory(db: Database) -> dict[str, Any]:
         {"_id": DEMO_PRODUCT_ID},
         {
             "$setOnInsert": {
-                "brand_name": "LotShield Demo Medicine",
+                "brand_name": "YaSafe Demo Medicine",
                 "generic_name": "Demo-only sample",
                 "registration_no": "DEMO-ONLY-NOT-A-REAL-REGISTRATION",
                 "manufacturer": "Demo data — no real manufacturer",
