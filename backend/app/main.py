@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import create_client, ensure_indexes
-from app.routers import health, inventory, notices, products
+from app.routers import activity, dashboard, health, inventory, matches, notices, products, sync
 
 logger = logging.getLogger("lotshield")
 
@@ -21,6 +21,7 @@ async def lifespan(app: FastAPI):
     db = client[settings.database_name]
     app.state.settings = settings
     app.state.db = db
+    app.state.mongo_client = client
 
     # An unreachable database should not crash the app: /api/health reports it.
     try:
@@ -34,20 +35,37 @@ async def lifespan(app: FastAPI):
     client.close()
 
 
-def create_app() -> FastAPI:
+@asynccontextmanager
+async def test_lifespan(app: FastAPI):
+    yield
+
+
+def create_app(*, manage_database: bool = True) -> FastAPI:
     app = FastAPI(
         title="LotShield API",
         description="Medicine recall and safety monitoring for independent pharmacies.",
         version="1.0.0",
-        lifespan=lifespan,
+        lifespan=lifespan if manage_database else test_lifespan,
     )
 
     # CORS origin comes from env; read directly so the app can be built
     # before settings are validated by the lifespan.
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173").strip()
+    cors_origins = tuple(
+        dict.fromkeys(
+            (
+                frontend_url,
+                *(
+                    origin.strip()
+                    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+                    if origin.strip()
+                ),
+            )
+        )
+    )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[frontend_url],
+        allow_origins=cors_origins,
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -57,6 +75,10 @@ def create_app() -> FastAPI:
     app.include_router(products.router, prefix="/api")
     app.include_router(inventory.router, prefix="/api")
     app.include_router(notices.router, prefix="/api")
+    app.include_router(matches.router, prefix="/api")
+    app.include_router(activity.router, prefix="/api")
+    app.include_router(dashboard.router, prefix="/api")
+    app.include_router(sync.router, prefix="/api")
     return app
 
 

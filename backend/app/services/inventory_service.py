@@ -11,6 +11,7 @@ Design decisions:
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -74,6 +75,7 @@ def create_inventory_item(db: Database, data: InventoryCreate) -> dict:
         "lot_number": data.lot_number,
         "quantity": data.quantity,
         "expiry_date": data.expiry_date,  # Python date or None
+        "is_demo": data.is_demo,
         "created_at": now,
         "updated_at": now,
     }
@@ -106,10 +108,26 @@ def list_inventory_items(
         query["product_id"] = product_oid
 
     if lot_number:
-        query["lot_number"] = {"$regex": f"^{lot_number.strip()}$", "$options": "i"}
+        query["lot_number"] = {"$regex": f"^{re.escape(lot_number.strip())}$", "$options": "i"}
 
     if search and not lot_number:
-        query["lot_number"] = {"$regex": search.strip(), "$options": "i"}
+        pattern = {"$regex": re.escape(search.strip()), "$options": "i"}
+        product_docs = db["products"].find(
+            {"$or": [
+                {"brand_name": pattern},
+                {"generic_name": pattern},
+                {"registration_no": pattern},
+            ]},
+            {"_id": 1},
+        )
+        matching_product_ids = [product["_id"] for product in product_docs]
+        search_or: list[dict] = [{"lot_number": pattern}]
+        if matching_product_ids:
+            search_or.append({"product_id": {"$in": matching_product_ids}})
+        if product_id:
+            query["$and"] = [{"$or": search_or}]
+        else:
+            query["$or"] = search_or
 
     total = db["inventory_items"].count_documents(query)
     cursor = (

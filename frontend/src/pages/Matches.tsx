@@ -230,7 +230,7 @@ function MatchRow({ match, onSelect }: { match: Match; onSelect: () => void }) {
   return (
     <tr className="align-top hover:bg-canvas-alt">
       <td className="px-4 py-4">
-        <p className="font-medium">{product?.brand_name ?? "ไม่มีข้อมูลผลิตภัณฑ์"}</p>
+        <p className="font-medium">{product?.brand_name ?? "ไม่มีข้อมูลผลิตภัณฑ์"}{match.inventory?.is_demo && <span className="ml-2 text-xs font-normal text-muted-strong">DEMO</span>}</p>
         <p className="mt-1 text-xs text-muted-strong">{product?.registration_no ?? "ไม่ระบุเลขทะเบียน"}</p>
       </td>
       <td className="px-4 py-4 text-sm">{match.inventory?.lot_number || <span className="italic text-muted-strong">ไม่ระบุ</span>}</td>

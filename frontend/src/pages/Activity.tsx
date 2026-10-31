@@ -24,6 +24,7 @@ import { useAsync } from "../hooks/useAsync";
 import type { ActivityEvent, ActivityType } from "../types/activity";
 import type { ReviewStatus } from "../types/match";
 import * as svc from "../services";
+import { isMockData } from "../services";
 
 const TYPE_LABELS: Record<ActivityType, string> = {
   MATCH_DETECTED: "พบรายการที่อาจเกี่ยวข้อง",
@@ -213,7 +214,7 @@ export default function Activity() {
 
   return (
     <AppLayout title="ประวัติการดำเนินการ" breadcrumb={[{ label: "ประวัติการดำเนินการ", to: "/activity" }]}
-      actions={<DemoDataTag />}>
+      actions={isMockData ? <DemoDataTag /> : undefined}>
       <header className="mb-6">
         <p className="text-sm text-muted-strong">Track review actions and changes made across your pharmacy workspace.</p>
       </header>

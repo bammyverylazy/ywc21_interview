@@ -12,9 +12,11 @@ import { EmptyState } from "../components/feedback/EmptyState";
 import { DemoDataTag } from "../components/feedback/DemoDataTag";
 import { Badge } from "../components/ui/Badge";
 import { NoticeForm } from "../components/alerts/NoticeForm";
+import { SyncPanel } from "../components/alerts/SyncPanel";
 import { NOTICE_TYPE_LABEL, formatThaiDate } from "../lib/th";
 import { useAsync } from "../hooks/useAsync";
 import * as svc from "../services";
+import { isMockData } from "../services";
 
 export default function Alerts() {
   const [search, setSearch]   = useState("");
@@ -24,14 +26,16 @@ export default function Alerts() {
 
   const filtered = (notices ?? []).filter((n) => {
     const q = search.toLowerCase();
-    const matchText = n.product_name.toLowerCase().includes(q) || (n.registration_no ?? "").toLowerCase().includes(q) || n.title.toLowerCase().includes(q);
+    const matchText = n.product_name.toLowerCase().includes(q) || (n.product_name_th ?? "").toLowerCase().includes(q) || (n.registration_no ?? "").toLowerCase().includes(q) || n.title.toLowerCase().includes(q) || n.affected_lots.some((lot) => (typeof lot === "string" ? lot : lot.lot_number).toLowerCase().includes(q));
     const matchType = !typeFilter || n.notice_type === typeFilter;
     return matchText && matchType;
   });
 
   return (
     <AppLayout title="ประกาศแจ้งเตือน" breadcrumb={[{ label: "ประกาศแจ้งเตือน", to: "/alerts" }]}
-      actions={<><DemoDataTag /><Button icon={<Plus className="h-4 w-4" />} onClick={() => setAddOpen(true)}>นำเข้าประกาศ</Button></>}>
+      actions={<>{isMockData && <DemoDataTag />}<Button icon={<Plus className="h-4 w-4" />} onClick={() => setAddOpen(true)}>นำเข้าประกาศ</Button></>}>
+
+      <SyncPanel onSynced={() => refetch()} />
 
       {/* Filters */}
       <div className="mb-5 flex flex-wrap gap-3">
@@ -69,7 +73,9 @@ export default function Alerts() {
                       <td className="px-5 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge color={n.notice_type === "RECALL" ? "danger" : "warn"}>{NOTICE_TYPE_LABEL[n.notice_type]}</Badge>
-                          <span className="font-medium">{n.product_name}</span>
+                          <span className="font-medium">{n.product_name_th ?? n.product_name}</span>
+                          {n.verification_status === "verified" && <Badge color="brand">ตรวจสอบแหล่งทางการแล้ว</Badge>}
+                          {n.record_origin === "manual" && <Badge color="warn">รายการป้อนเอง · ยังไม่ยืนยัน</Badge>}
                         </div>
                         <p className="mt-0.5 line-clamp-1 text-xs text-muted-strong">{n.title}</p>
                       </td>

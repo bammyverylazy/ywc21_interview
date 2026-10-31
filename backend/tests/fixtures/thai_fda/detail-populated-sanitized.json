@@ -1,0 +1,42 @@
+{
+  "RESULT": "FAIL",
+  "TR_ID": "REQ_QLY_PROB_10100-TEST-0001",
+  "MODEL_DRUG": {
+    "REPORT_QLY_PROBLEM": {
+      "TR_ID": "REQ_QLY_PROB_10100-TEST-0001",
+      "DRUG_NM": "ตัวอย่างยา",
+      "DRUG_NMM": "Example Medicine",
+      "DRUG_REGISTER": "1C 99/99",
+      "DRUG_MANUF": "Example Manufacturer",
+      "DRUG_FORMAT": "CAPSULE HARD",
+      "DRUG_FORMAT_OTHER": null,
+      "DRUG_CRITICON": "18 MCG",
+      "PHYSICAL13_OTHER": "Sanitized quality issue",
+      "PRE_ACTION": "Sanitized recall action",
+      "CITIZEN_ID": "REDACTED",
+      "FULL_ADDR": "REDACTED"
+    },
+    "REPORT_QLY_PROBLEM_DETAIL": [
+      {
+        "IDA": 1,
+        "MFD_DATE": "/Date(1620579600000)/",
+        "MFD_DATE_TH": null,
+        "EXP_DATE": "/Date(1636390800000)/",
+        "EXP_DATE_TH": null,
+        "LOT_NO": "LOT-TEST-1",
+        "FK_IDA": "1"
+      },
+      {
+        "IDA": 2,
+        "MFD_DATE": null,
+        "MFD_DATE_TH": null,
+        "EXP_DATE": null,
+        "EXP_DATE_TH": null,
+        "LOT_NO": "LOT-TEST-2",
+        "FK_IDA": "1"
+      }
+    ],
+    "SAFETY_ALERT_OPERATION": []
+  },
+  "FILE_ATTACH": {}
+}

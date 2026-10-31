@@ -2200,3 +2200,178 @@ The project demonstrates:
 The MVP's success should be measured by whether a user can complete the entire monitoring and review workflow reliably, not by the number of features included.
 
 **LotShield — Making Medicine Safety Monitoring More Traceable and Manageable.**
+
+---
+
+# Local API and Data Import
+
+The frontend uses the real API by default. Copy `frontend/.env.example` to
+`frontend/.env`; Vite proxies `/api` requests to `http://localhost:8000`.
+Set `VITE_USE_MOCK=true` only when intentionally using the clearly labeled
+frontend demo data. API errors are displayed and are never silently replaced
+with mock records.
+
+Start the backend from `backend` with the configured Python environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```
+
+In another terminal, start the frontend from `frontend`:
+
+```powershell
+npm run dev
+```
+
+## Thai FDA notice synchronization
+
+The public [Thai FDA Drug Alert page](https://apres.fda.moph.go.th/FDA_POST_VIEW_CENTER/PUBLIC/DRUG_ALERT)
+uses a listing service at
+`https://apres.fda.moph.go.th/POST_CENTER_SERVICE_DRUG/GATE_WAY/WS_SAFETY_ALERT?SYSTEM_ID=DRUG`.
+The adapter follows that observed, read-only listing call, identifies records
+with the composite `TR_ID:IDA` (falling back to `NEWCODE`), and incrementally
+upserts them by source identity/content hash. Changed records are saved to
+`safety_notice_revisions`; repeated unchanged records only update last-checked
+metadata. A failed or empty fetch never deletes existing notices.
+
+**Important source limitations:** in the 297-row listing response inspected on
+2026-10-31, `LOTNO`, `MFT_DATE`, `EXP_DATE`, `COMPANY_NAME`, publication-related
+date fields, `FACT_SHEET`, and `LINK_INFORMATION` were empty for all 297 rows.
+`REGISTER` was present on 226 rows; Thai and English product-name fields were
+present on 213 and 295 rows, respectively. `CREATE_DATE` is retained as
+`source_created_at`, not presented as a verified publication date. The adapter
+parses the observed `dd/MM/yyyy HH:mm:ss` source timestamp format as well as
+the .NET date format; the slash-form timestamp is interpreted in the Thai
+`Asia/Bangkok` timezone. `SETTIME_DISPLAY` is only a `NEW` marker in the page
+markup, not a date. Notice type is classified from the listing's alert text
+and action flags, and is marked as a machine classification. Missing details
+remain missing, and automatically synchronized notices are marked for manual
+review rather than verified. This is a notice listing convenience, not a
+complete or real-time recall monitor; staff must check the original FDA source
+and use professional judgment.
+
+### Investigation of detail records and attachments (2026-10-31)
+
+The public page's Angular code opens a listing row using
+`get_detail_safety(datas.MAIN_TR, datas)`. It resets its request model and
+POSTs to
+`https://apres.fda.moph.go.th/POST_CENTER_SERVICE_DRUG/GATE_WAY/GATEWAY_EXCHANGE`
+with JSON containing a stringified `MODEL`:
+
+```json
+{
+  "TR_ID": "<listing MAIN_TR>",
+  "PROCESS_ID": "REQ_QLY_PROB_10100",
+  "FUNC_CODE": "FUNC-CORE-001-73,FUNC-CORE-001-40,FUNC-CORE-001-86"
+}
+```
+
+The identifier is important: listing `TR_ID` values end in `_SFTY_ALT`, while
+the page passes the distinct `MAIN_TR` value. Using the listing `TR_ID` returns
+no useful record. The detail retrieval bootstraps a normal public page session
+with `GET https://apres.fda.moph.go.th/FDA_POST_VIEW_CENTER/PUBLIC/DRUG_ALERT`,
+then sends the observed POST with that page's `cookiesession1` cookie. The
+page's detail call does not add a CSRF token or custom authorization header.
+Without the page session, the request returned HTTP 200 with an empty JSON
+body. No authentication, CAPTCHA, or other access control was bypassed.
+
+With the correct `MAIN_TR`, the response contains useful data in
+`MODEL_DRUG.REPORT_QLY_PROBLEM` and
+`MODEL_DRUG.REPORT_QLY_PROBLEM_DETAIL`. Some responses still say
+`RESULT=FAIL`; this status does not mean the nested detail is empty. The
+adapter accepts a response only when those expected nested objects are
+present, and records the status as `partial` when the service reports failure.
+Observed detail fields include Thai/English product names, registration,
+manufacturer, dosage form, strength, safety issue/action, and LOT rows with
+manufacturing and expiry dates where supplied. Generic name and verified
+publication date were not present in the inspected records. `CREATE_DATE`
+remains record creation time, not publication date.
+
+The page source also defines a separate attachment-list request using
+`PROCESS_ID=SFTY_ALT_10100` and `FUNC_CODE=FUNC-CORE-001-68`. It returns
+`LIST_ATTACH` groups with `ATTACH_FILE_NM_FAKE` and original filenames. The
+source-served file URL is
+`GATE_WAY/GET_ITEM_FILE_ATTACH?NAME_FAKE=<source file identifier>`. The three
+inspected records were the recent 2026-09-07 record, an older 2021-02-07
+record, and a 2026-05-10 record. All three detail responses contained LOT
+data (**3/3 inspected**); the listing itself contained LOT data in **0/297**
+rows. The older CoronaVac record exposed two JPG attachment metadata entries.
+The tested source file route returned `FILE NOT FOUND`, including with the
+page session and referrer. No PDF was observed, so PDF text extraction and
+attachment-content claims are not made.
+
+Detail and attachment-list retrieval are optional per-record enrichment of
+the existing listing sync; they do not replace it. The adapter records
+retrieval status, source URL/identifier, normalized values, and field/LOT
+provenance. Raw detail responses are retained with reporter/contact fields
+redacted and a SHA-256 digest of the original response. Failed or incomplete
+enrichment does not erase previously stored detail values. Machine-extracted
+LOTs and attachment metadata require manual review; manually verified values
+are kept distinct. Missing fields remain explicitly unavailable. No live sync
+or database write is part of routine tests.
+
+Synchronization is disabled if `FDA_SYNC_ENABLED` is unset or false. Set it
+to `true` in the backend environment before starting the API:
+
+```text
+FDA_SYNC_ENABLED=true
+FDA_SYNC_INTERVAL_HOURS=24
+FDA_SYNC_TIMEOUT_SECONDS=20
+FDA_SYNC_MAX_RETRIES=2
+FDA_SYNC_REQUEST_DELAY_SECONDS=1
+```
+
+The Alerts page starts a manual run with `POST /api/sync/thai-fda`; no
+synchronization admin key is required or sent to the browser. The endpoint
+retains the MongoDB-backed single-run lease and rejects a concurrent run with
+HTTP 409. It also enforces a 60-second cooldown between accepted manual
+triggers and returns HTTP 429 with `Retry-After` during the cooldown. Sync
+status and history endpoints remain read-only. This unauthenticated trigger is
+intended for the single-pharmacy MVP/demo deployment, not a publicly exposed
+production service.
+
+For unattended operation, create a **Render Cron Job** using the same backend
+repository, Python version, and environment variables as the API service. Set
+its schedule to daily (or more frequently if desired), and use this command
+from the `backend` directory:
+
+```powershell
+python -m app.ingestion.sync_thai_fda --trigger SCHEDULED --confirm-source-sync
+```
+
+The configured `FDA_SYNC_INTERVAL_HOURS` is checked before each scheduled
+fetch; a not-yet-due run is recorded as `SKIPPED` and exits successfully. A
+partial result (including records needing human review) also exits successfully
+so expected source omissions do not make a Cron job appear broken. Retrieval
+or total synchronization failures exit non-zero. The command requires
+`FDA_SYNC_ENABLED=true` and the explicit confirmation flag because it writes
+the fetched notices and sync history to MongoDB.
+
+Prepare a JSON object with a `records` array following the `NoticeCreate`
+fields in `backend/app/schemas/notice.py`, then run from `backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.ingestion.import_thai_fda path\to\reviewed-records.json --confirm-source-review
+```
+
+The importer accepts only HTTPS URLs on the Thai FDA host allowlist, validates
+each notice, upserts it by source URL, records the raw source payload, and
+reports records missing registration or affected LOT data for manual review.
+The confirmation flag is an operator attestation, not automatic verification
+of the page contents. The repository contains no preloaded official notices.
+
+For UI/API demonstrations only, one explicitly marked inventory lot can be
+added to the configured database. It is not tied to any official notice and
+must never be used as evidence of a real match:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.seed_demo_inventory --confirm-demo-data
+```
+
+The seed command is idempotent and sets both `data_origin=demo` and
+`is_demo=true`; it creates no official notice. To verify the backend without
+MongoDB, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```

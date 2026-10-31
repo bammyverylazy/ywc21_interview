@@ -24,6 +24,7 @@ class InventoryCreate(BaseModel):
     lot_number: Optional[str] = Field(default=None, max_length=100)
     quantity: int = Field(..., ge=0, description="Non-negative integer")
     expiry_date: Optional[date] = None
+    is_demo: bool = False
 
     @field_validator("product_id")
     @classmethod
@@ -45,6 +46,7 @@ class InventoryUpdate(BaseModel):
     lot_number: Optional[str] = Field(default=None, max_length=100)
     quantity: Optional[int] = Field(default=None, ge=0)
     expiry_date: Optional[date] = None
+    is_demo: Optional[bool] = None
 
     @field_validator("lot_number", mode="before")
     @classmethod
@@ -83,6 +85,7 @@ class InventoryOut(BaseModel):
     lot_number: Optional[str] = None
     quantity: int
     expiry_date: Optional[date] = None
+    is_demo: bool = False
     created_at: datetime
     updated_at: datetime
 

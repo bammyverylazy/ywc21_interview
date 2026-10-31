@@ -35,6 +35,8 @@ def test_defaults_applied_when_optional_vars_missing(monkeypatch):
     monkeypatch.delenv("DATABASE_NAME", raising=False)
     monkeypatch.delenv("FRONTEND_URL", raising=False)
     monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("FDA_SYNC_DETAIL_ENRICHMENT_ENABLED", raising=False)
+    monkeypatch.setenv("FDA_SYNC_ADMIN_KEY", "unused")
 
     settings = get_settings()
 
@@ -42,3 +44,12 @@ def test_defaults_applied_when_optional_vars_missing(monkeypatch):
     assert settings.database_name == "lotshield_db"
     assert settings.frontend_url == "http://localhost:5173"
     assert settings.environment == "development"
+    assert settings.fda_sync_detail_enrichment_enabled is True
+    assert not hasattr(settings, "fda_sync_admin_key")
+
+
+def test_detail_enrichment_can_be_disabled_explicitly(monkeypatch):
+    monkeypatch.setenv("MONGODB_URI", "mongodb://localhost:27017")
+    monkeypatch.setenv("FDA_SYNC_DETAIL_ENRICHMENT_ENABLED", "false")
+
+    assert get_settings().fda_sync_detail_enrichment_enabled is False

@@ -1,11 +1,12 @@
 // Mock service layer — same shape as the real API module.
-// Swap by setting VITE_USE_MOCK=false and pointing VITE_API_BASE_URL at the backend.
+// Enable this adapter explicitly with VITE_USE_MOCK=true.
 import { DASHBOARD_SUMMARY, INVENTORY, MATCHES, NOTICES, PRODUCTS, ACTION_LOGS } from "./data";
 import type { Product } from "../../types/product";
 import type { InventoryItem } from "../../types/inventory";
 import type { SafetyNotice } from "../../types/notice";
 import type { Match, ActionLog, ReviewStatus } from "../../types/match";
 import type { ActivityEvent, ActivityType } from "../../types/activity";
+import type { SyncHistoryPage, SyncRun, SyncStatus, SyncTriggerResult } from "../../types/sync";
 
 const delay = <T>(v: T, ms = 300) => new Promise<T>((r) => setTimeout(() => r(v), ms));
 
@@ -93,6 +94,22 @@ export const runMatching = (): Promise<{ total_checked: number; exact_matches: n
 export const getDashboardSummary = () => delay({ ...DASHBOARD_SUMMARY });
 export const getRecentActivity = () => delay([...ACTION_LOGS].reverse().slice(0, 5));
 export const getAttentionItems = () => delay(MATCHES.filter((m) => m.match_status !== "NO_MATCH" && m.review_status === "PENDING"));
+export const getSyncStatus = (): Promise<SyncStatus> => delay({
+  current_status: "NOT_RUN" as const,
+  last_attempted_at: null,
+  last_successful_at: null,
+  last_run: null,
+});
+export const getSyncHistory = (params?: object): Promise<SyncHistoryPage> => delay({
+  items: [],
+  total: 0,
+  skip: 0,
+  limit: params && "limit" in params && typeof params.limit === "number" ? params.limit : 10,
+});
+export const getSyncRun = (_id: string): Promise<SyncRun> =>
+  Promise.reject(new Error("Sync history is unavailable in demo mode."));
+export const startThaiFdaSync = (): Promise<SyncTriggerResult> =>
+  Promise.reject(new Error("Synchronization requires live API mode."));
 
 // Product CRUD stubs (mock)
 export const createProduct = (data: Omit<import("../../types/product").Product, "_id"|"created_at"|"updated_at">): Promise<import("../../types/product").Product> => {

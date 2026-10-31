@@ -14,7 +14,6 @@ from app.config import Settings
 logger = logging.getLogger("lotshield.database")
 
 # (collection, field, direction) - matches the recommended indexes in README 6.8.
-# No unique indexes yet: duplicate-handling rules are not confirmed.
 INDEXES: list[tuple[str, str, int]] = [
     ("products", "registration_no", ASCENDING),
     ("products", "brand_name", ASCENDING),
@@ -22,13 +21,19 @@ INDEXES: list[tuple[str, str, int]] = [
     ("inventory_items", "lot_number", ASCENDING),
     ("safety_notices", "registration_no", ASCENDING),
     ("safety_notices", "published_at", DESCENDING),
-    ("safety_notices", "source_url", ASCENDING),
+    ("safety_notices", "source_id", ASCENDING),
     ("matches", "inventory_id", ASCENDING),
     ("matches", "notice_id", ASCENDING),
     ("matches", "match_status", ASCENDING),
+    ("matches", "checked_at", DESCENDING),
     ("action_logs", "match_id", ASCENDING),
+    ("action_logs", "created_at", DESCENDING),
+    ("sync_logs", "started_at", DESCENDING),
+    ("sync_logs", "status", ASCENDING),
+    ("safety_notice_revisions", "source_id", ASCENDING),
+    ("safety_notice_revisions", "changed_at", DESCENDING),
+    ("safety_notices", "source_name", ASCENDING),
 ]
-
 
 def create_client(settings: Settings) -> MongoClient:
     # MongoClient connects lazily; a short selection timeout keeps failures fast.
@@ -44,3 +49,11 @@ def ensure_indexes(db: Database) -> None:
     """Create the recommended indexes. Safe to call repeatedly (idempotent)."""
     for collection, field, direction in INDEXES:
         db[collection].create_index([(field, direction)])
+    db["safety_notices"].create_index(
+        [("source_url", ASCENDING)], unique=True, name="uq_safety_notices_source_url"
+    )
+    db["matches"].create_index(
+        [("inventory_id", ASCENDING), ("notice_id", ASCENDING)],
+        unique=True,
+        name="uq_matches_inventory_notice",
+    )

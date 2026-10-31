@@ -1,89 +1,170 @@
-// Real API module. Swap VITE_USE_MOCK=false to activate.
-// PROVISIONAL: endpoints match README §7; shapes confirmed when backend is ready.
 import axios from "axios";
 import type { ActivityEvent } from "../../types/activity";
+import type { InventoryItem, InventoryProductSummary } from "../../types/inventory";
 import type { ActionLog, Match, ReviewStatus } from "../../types/match";
-import type { ActivityType } from "../../types/activity";
-import type { InventoryItem } from "../../types/inventory";
-import type { Product } from "../../types/product";
 import type { SafetyNotice } from "../../types/notice";
-const client = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || "/api" });
-client.interceptors.response.use((r) => r, (e) => { console.error("API error", e); return Promise.reject(e); });
-const get = <T>(url: string, p?: object) => client.get<T>(url, { params: p }).then((r) => r.data);
-const post = <T>(url: string, d?: object) => client.post<T>(url, d).then((r) => r.data);
+import type { Product } from "../../types/product";
+import type { SyncHistoryPage, SyncRun, SyncStatus, SyncTriggerResult } from "../../types/sync";
 
-export const getProducts = (): Promise<Product[]> => get("/products");
-export const getProduct = (id: string): Promise<Product> => get(`/products/${id}`);
-export const getInventory = (p?: object): Promise<InventoryItem[]> => get("/inventory", p);
-export const getInventoryItem = (id: string): Promise<InventoryItem> => get(`/inventory/${id}`);
-export const getNotices = (p?: object): Promise<SafetyNotice[]> => get("/notices", p);
-export const getNotice = (id: string): Promise<SafetyNotice> => get(`/notices/${id}`);
-export const getMatches = (p?: object): Promise<Match[]> => get("/matches", p);
-export const getMatch = (id: string): Promise<Match> => get(`/matches/${id}`);
-export const getActionLogs = (matchId: string): Promise<ActionLog[]> => get(`/matches/${matchId}/actions`);
-export const addActionLog = (matchId: string, status: ReviewStatus, action_note: string): Promise<ActionLog> =>
-  post(`/matches/${matchId}/actions`, { status, action_note });
-const activityTypeForStatus = (status: ReviewStatus): ActivityType => {
-  if (status === "ESCALATED") return "ESCALATED";
-  if (status === "ACTION_RECORDED") return "ACTION_RECORDED";
-  if (status === "REVIEWED") return "REVIEWED";
-  return "STATUS_UPDATED";
-};
-const reviewDescription = (status: ReviewStatus): string => {
-  if (status === "ESCALATED") return "ส่งกรณีนี้เพื่อตรวจสอบเพิ่มเติม";
-  if (status === "ACTION_RECORDED") return "บันทึกการดำเนินการสำหรับกรณีนี้";
-  if (status === "REVIEWED") return "ตรวจสอบผลการจับคู่แล้ว";
-  return "อัปเดตสถานะการตรวจสอบ";
-};
-export const getActivity = async (): Promise<ActivityEvent[]> => {
-  const matches = await getMatches();
-  const expandedMatches = await Promise.all(matches.map(async (match) => {
-    const [inventory, notice] = await Promise.all([
-      match.inventory ?? getInventoryItem(match.inventory_id),
-      match.notice ?? getNotice(match.notice_id),
-    ]);
-    const product = inventory?.product ?? (inventory ? await getProduct(inventory.product_id) : undefined);
-    return {
-      ...match,
-      inventory: inventory ? { ...inventory, product: product ?? undefined } : undefined,
-      notice: notice ?? undefined,
-    };
-  }));
-  const events = await Promise.all(expandedMatches.map(async (match) => {
-    const logs = await getActionLogs(match._id);
-    return logs.map((log): ActivityEvent => ({
-      _id: log._id,
-      activity_type: activityTypeForStatus(log.status),
-      description: reviewDescription(log.status),
-      occurred_at: log.created_at,
-      match_id: match._id,
-      match,
-      new_status: log.status,
-      notes: log.action_note,
-    }));
-  }));
-  const detections: ActivityEvent[] = matches
-    .filter((match) => match.match_status !== "NO_MATCH")
-    .map((match) => ({
-      _id: `detected-${match._id}`,
-      activity_type: "MATCH_DETECTED",
-      description: "ตรวจพบรายการสินค้าคงคลังที่อาจเกี่ยวข้องกับประกาศ",
-      occurred_at: match.checked_at,
-      match_id: match._id,
-      match,
-    }));
-  return [...detections, ...events.flat()].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
-};
-export const runMatching = () => post("/matches/run", { scope: "ALL" });
-export const getDashboardSummary = () => get("/dashboard/summary");
-export const getRecentActivity = () => get("/dashboard/recent-activity");
-export const getAttentionItems = () => get("/dashboard/attention-items");
+interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  skip: number;
+  limit: number;
+}
 
-export const createProduct       = (data: object) => post("/products", data);
-export const updateProduct       = (id: string, data: object) => client.put(`/products/${id}`, data).then((r) => r.data);
-export const deleteProduct       = (id: string) => client.delete(`/products/${id}`).then((r) => r.data);
-export const createInventoryItem = (data: object) => post("/inventory", data);
-export const updateInventoryItem = (id: string, data: object) => client.put(`/inventory/${id}`, data).then((r) => r.data);
-export const deleteInventoryItem = (id: string) => client.delete(`/inventory/${id}`).then((r) => r.data);
-export const createNotice        = (data: object) => post("/notices", data);
-export const deleteNotice        = (id: string) => client.delete(`/notices/${id}`).then((r) => r.data);
+type ApiProduct = Omit<Product, "_id"> & { id: string };
+type ApiProductSummary = Omit<InventoryProductSummary, "_id"> & { id: string };
+type ApiInventory = Omit<InventoryItem, "_id" | "product"> & {
+  id: string;
+  product?: ApiProductSummary | null;
+};
+type ApiNotice = Omit<SafetyNotice, "_id" | "source_name"> & {
+  id: string;
+  source_name?: string | null;
+};
+type ApiMatch = Omit<Match, "_id" | "inventory" | "notice"> & {
+  id: string;
+  inventory?: ApiInventory | null;
+  notice?: ApiNotice | null;
+};
+type ApiActionLog = Omit<ActionLog, "_id"> & { id: string };
+type ApiActivity = Omit<ActivityEvent, "_id" | "match"> & {
+  id: string;
+  match?: ApiMatch | null;
+};
+
+const client = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
+  timeout: 15000,
+});
+client.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    console.error("API request failed", error);
+    return Promise.reject(error);
+  },
+);
+
+const get = <T>(url: string, params?: object) =>
+  client.get<T>(url, { params }).then((response) => response.data);
+const post = <T>(url: string, data?: object) =>
+  client.post<T>(url, data).then((response) => response.data);
+
+async function getAll<T>(url: string, params?: object): Promise<T[]> {
+  const limit = 200;
+  const first = await get<PaginatedResponse<T>>(url, { ...params, skip: 0, limit });
+  const items = [...first.items];
+  for (let skip = first.items.length; skip < first.total; skip += limit) {
+    const page = await get<PaginatedResponse<T>>(url, { ...params, skip, limit });
+    items.push(...page.items);
+  }
+  return items;
+}
+
+const normalizeProduct = (product: ApiProduct): Product => ({
+  ...product,
+  _id: product.id,
+});
+
+const normalizeInventory = (item: ApiInventory): InventoryItem => ({
+  ...item,
+  _id: item.id,
+  product: item.product
+    ? {
+        _id: item.product.id,
+        brand_name: item.product.brand_name,
+        generic_name: item.product.generic_name,
+        registration_no: item.product.registration_no,
+        manufacturer: item.product.manufacturer,
+      }
+    : undefined,
+});
+
+const normalizeNotice = (notice: ApiNotice): SafetyNotice => ({
+  ...notice,
+  _id: notice.id,
+  source_name: notice.source_name ?? "ไม่ระบุแหล่งข้อมูล",
+});
+
+const normalizeMatch = (match: ApiMatch): Match => ({
+  ...match,
+  _id: match.id,
+  inventory: match.inventory ? normalizeInventory(match.inventory) : undefined,
+  notice: match.notice ? normalizeNotice(match.notice) : undefined,
+});
+
+const normalizeActionLog = (log: ApiActionLog): ActionLog => ({
+  ...log,
+  _id: log.id,
+});
+
+const normalizeActivity = (event: ApiActivity): ActivityEvent => ({
+  ...event,
+  _id: event.id,
+  match: event.match ? normalizeMatch(event.match) : undefined,
+});
+
+export const getProducts = async (params?: object): Promise<Product[]> =>
+  (await getAll<ApiProduct>("/products", params)).map(normalizeProduct);
+export const getProduct = async (id: string): Promise<Product> =>
+  normalizeProduct(await get<ApiProduct>(`/products/${id}`));
+export const getInventory = async (params?: object): Promise<InventoryItem[]> =>
+  (await getAll<ApiInventory>("/inventory", params)).map(normalizeInventory);
+export const getInventoryItem = async (id: string): Promise<InventoryItem> =>
+  normalizeInventory(await get<ApiInventory>(`/inventory/${id}`));
+export const getNotices = async (params?: object): Promise<SafetyNotice[]> =>
+  (await getAll<ApiNotice>("/notices", params)).map(normalizeNotice);
+export const getNotice = async (id: string): Promise<SafetyNotice> =>
+  normalizeNotice(await get<ApiNotice>(`/notices/${id}`));
+export const getMatches = async (params?: object): Promise<Match[]> =>
+  (await getAll<ApiMatch>("/matches", params)).map(normalizeMatch);
+export const getMatch = async (id: string): Promise<Match> =>
+  normalizeMatch(await get<ApiMatch>(`/matches/${id}`));
+export const getActionLogs = async (matchId: string): Promise<ActionLog[]> =>
+  (await get<ApiActionLog[]>(`/matches/${matchId}/actions`)).map(normalizeActionLog);
+export const addActionLog = async (
+  matchId: string,
+  status: ReviewStatus,
+  action_note: string,
+): Promise<ActionLog> =>
+  normalizeActionLog(await post<ApiActionLog>(`/matches/${matchId}/actions`, { status, action_note }));
+export const getActivity = async (): Promise<ActivityEvent[]> =>
+  (await getAll<ApiActivity>("/activity")).map(normalizeActivity);
+export const runMatching = () =>
+  post<{ total_checked: number; exact_matches: number; potential_matches: number; no_matches: number }>(
+    "/matches/run",
+    { scope: "ALL" },
+  );
+export const getDashboardSummary = () => get<{
+  total_products: number;
+  total_inventory: number;
+  total_notices: number;
+  exact_matches: number;
+  potential_matches: number;
+  pending_review: number;
+  last_notice_at: string | null;
+}>("/dashboard/summary");
+export const getRecentActivity = async (): Promise<ActionLog[]> =>
+  (await get<ApiActionLog[]>("/dashboard/recent-activity")).map(normalizeActionLog);
+export const getAttentionItems = async (): Promise<Match[]> =>
+  (await get<ApiMatch[]>("/dashboard/attention-items")).map(normalizeMatch);
+export const getSyncStatus = () => get<SyncStatus>("/sync/status");
+export const getSyncHistory = (params?: object) => get<SyncHistoryPage>("/sync/history", params);
+export const getSyncRun = (id: string) => get<SyncRun>(`/sync/history/${id}`);
+export const startThaiFdaSync = () =>
+  client.post<SyncTriggerResult>("/sync/thai-fda").then((response) => response.data);
+
+export const createProduct = async (data: object): Promise<Product> =>
+  normalizeProduct(await post<ApiProduct>("/products", data));
+export const updateProduct = async (id: string, data: object): Promise<Product> =>
+  normalizeProduct(await client.put<ApiProduct>(`/products/${id}`, data).then((response) => response.data));
+export const deleteProduct = (id: string) => client.delete(`/products/${id}`).then((response) => response.data);
+export const createInventoryItem = async (data: object): Promise<InventoryItem> =>
+  normalizeInventory(await post<ApiInventory>("/inventory", data));
+export const updateInventoryItem = async (id: string, data: object): Promise<InventoryItem> =>
+  normalizeInventory(await client.put<ApiInventory>(`/inventory/${id}`, data).then((response) => response.data));
+export const deleteInventoryItem = (id: string) => client.delete(`/inventory/${id}`).then((response) => response.data);
+export const createNotice = async (data: object): Promise<SafetyNotice> =>
+  normalizeNotice(await post<ApiNotice>("/notices", data));
+export const deleteNotice = (id: string) => client.delete(`/notices/${id}`).then((response) => response.data);

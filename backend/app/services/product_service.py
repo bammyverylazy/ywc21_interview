@@ -37,6 +37,9 @@ def create_product(db: Database, data: ProductCreate) -> dict:
         "generic_name": data.generic_name,
         "registration_no": data.registration_no,
         "manufacturer": data.manufacturer,
+        "strength": data.strength,
+        "dosage_form": data.dosage_form,
+        "data_origin": data.data_origin,
         "created_at": now,
         "updated_at": now,
     }

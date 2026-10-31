@@ -80,6 +80,7 @@ def test_create_notice_data_completeness_full(client):
     assert dc["has_registration_no"] is True
     assert dc["has_lot_information"] is True
     assert dc["has_manufacturer"] is False  # not supplied in VALID_NOTICE
+    assert body["field_provenance"]["registration_no"]["origin"] == "manual_unverified"
 
 
 def test_create_notice_data_completeness_minimal(client):
@@ -234,6 +235,21 @@ def test_update_notice_adds_lot_information(client):
     body = resp.json()
     assert body["affected_lots"] == ["L99001"]
     assert body["data_completeness"]["has_lot_information"] is True
+    assert body["field_provenance"]["affected_lots"]["origin"] == "manual_unverified"
+
+
+def test_update_notice_relabels_changed_field_provenance(client):
+    created = _create(client, VALID_NOTICE)
+
+    response = client.put(
+        f"/api/notices/{created['id']}",
+        json={"registration_no": "UPDATED-REG"},
+    )
+
+    assert response.status_code == 200
+    provenance = response.json()["field_provenance"]["registration_no"]
+    assert provenance["origin"] == "manual_unverified"
+    assert provenance["extraction_method"] == "manual_api_update"
 
 
 def test_update_notice_completeness_recomputed(client):

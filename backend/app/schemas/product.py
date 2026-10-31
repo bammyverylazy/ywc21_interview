@@ -24,6 +24,9 @@ class ProductCreate(BaseModel):
     generic_name: Optional[str] = Field(default=None, max_length=200)
     registration_no: Optional[str] = Field(default=None, max_length=100)
     manufacturer: Optional[str] = Field(default=None, max_length=200)
+    strength: Optional[str] = Field(default=None, max_length=100)
+    dosage_form: Optional[str] = Field(default=None, max_length=100)
+    data_origin: str = Field(default="manual", pattern="^(manual|demo|verified_source)$")
 
     @field_validator("brand_name")
     @classmethod
@@ -32,7 +35,7 @@ class ProductCreate(BaseModel):
             raise ValueError("brand_name must not be blank")
         return v.strip()
 
-    @field_validator("generic_name", "registration_no", "manufacturer", mode="before")
+    @field_validator("generic_name", "registration_no", "manufacturer", "strength", "dosage_form", mode="before")
     @classmethod
     def strip_optional_strings(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
@@ -48,6 +51,8 @@ class ProductUpdate(BaseModel):
     generic_name: Optional[str] = Field(default=None, max_length=200)
     registration_no: Optional[str] = Field(default=None, max_length=100)
     manufacturer: Optional[str] = Field(default=None, max_length=200)
+    strength: Optional[str] = Field(default=None, max_length=100)
+    dosage_form: Optional[str] = Field(default=None, max_length=100)
 
     @field_validator("brand_name")
     @classmethod
@@ -56,7 +61,7 @@ class ProductUpdate(BaseModel):
             raise ValueError("brand_name must not be blank")
         return v.strip() if v is not None else None
 
-    @field_validator("generic_name", "registration_no", "manufacturer", mode="before")
+    @field_validator("generic_name", "registration_no", "manufacturer", "strength", "dosage_form", mode="before")
     @classmethod
     def strip_optional_strings(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
@@ -79,6 +84,9 @@ class ProductOut(BaseModel):
     generic_name: Optional[str] = None
     registration_no: Optional[str] = None
     manufacturer: Optional[str] = None
+    strength: Optional[str] = None
+    dosage_form: Optional[str] = None
+    data_origin: str = "manual"
     created_at: datetime
     updated_at: datetime
 

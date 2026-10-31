@@ -9,6 +9,7 @@ import { PageError } from "../components/ui/PageError";
 import { DemoDataTag } from "../components/feedback/DemoDataTag";
 import { useAsync } from "../hooks/useAsync";
 import * as svc from "../services";
+import { isMockData } from "../services";
 
 export default function Dashboard() {
   const summary  = useAsync(svc.getDashboardSummary);
@@ -26,7 +27,7 @@ export default function Dashboard() {
   return (
     <AppLayout
       title="ภาพรวมระบบ"
-      actions={<DemoDataTag />}
+      actions={isMockData ? <DemoDataTag /> : undefined}
     >
       {/* Run matching quick action */}
       <div className="mb-6">

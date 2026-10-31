@@ -1,0 +1,19 @@
+{
+  "RESULT": "FAIL",
+  "TR_ID": "SANITIZED",
+  "NOTE": "",
+  "PATH_PDF": null,
+  "FILE_ATTACH": [],
+  "MODEL_DRUG": {
+    "REPORT_QLY_PROBLEM": {
+      "DRUG_NM": "",
+      "DRUG_REGISTER": "",
+      "DRUG_MANUF": "",
+      "LOT_CHK": "",
+      "CREATE_DATE": "",
+      "STATUS_DATE": ""
+    },
+    "REPORT_QLY_PROBLEM_DETAIL": [],
+    "SAFETY_ALERT_OPERATION": []
+  }
+}

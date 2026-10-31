@@ -18,12 +18,14 @@ will extend it as required.
 from __future__ import annotations
 
 import copy
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import pytest
 from bson import ObjectId
 from fastapi.testclient import TestClient
+from pymongo.errors import DuplicateKeyError
 
 from app.dependencies import get_db
 from app.main import create_app
@@ -56,11 +58,39 @@ def _matches_query(doc: dict, query: dict) -> bool:
         if key == "$or":
             if not any(_matches_query(doc, sub) for sub in value):
                 return False
+        elif key == "$and":
+            if not all(_matches_query(doc, sub) for sub in value):
+                return False
+        elif "." in key:
+            found = doc
+            for part in key.split("."):
+                found = found.get(part) if isinstance(found, dict) else None
+            if isinstance(value, dict) and "$regex" in value:
+                options = re.IGNORECASE if value.get("$options") == "i" else 0
+                candidates = found if isinstance(found, list) else [found]
+                if not any(re.search(value["$regex"], str(candidate or ""), options) for candidate in candidates):
+                    return False
+            elif found != value:
+                return False
         elif isinstance(value, dict):
-            # We treat regex queries as always-matching for simplicity in tests
-            # that don't need to verify search results precisely.
             if "$regex" in value:
-                pass  # skip regex filtering in the fake — covered by real tests
+                options = re.IGNORECASE if value.get("$options") == "i" else 0
+                candidates = doc.get(key) if isinstance(doc.get(key), list) else [doc.get(key)]
+                if not any(re.search(value["$regex"], str(candidate or ""), options) for candidate in candidates):
+                    return False
+            elif "$in" in value:
+                if doc.get(key) not in value["$in"]:
+                    return False
+            elif "$gte" in value or "$lte" in value:
+                candidate = doc.get(key)
+                if candidate is None:
+                    return False
+                lower = value.get("$gte")
+                upper = value.get("$lte")
+                if lower is not None and candidate < lower:
+                    return False
+                if upper is not None and candidate > upper:
+                    return False
             else:
                 return False
         else:
@@ -76,6 +106,15 @@ class FakeCursor:
         self._limit_n = 0
 
     def sort(self, *args, **kwargs) -> "FakeCursor":
+        if args:
+            sort_spec = args[0]
+            if isinstance(sort_spec, str):
+                sort_spec = [(sort_spec, args[1] if len(args) > 1 else 1)]
+            for key, direction in reversed(sort_spec):
+                self._docs.sort(
+                    key=lambda doc: (doc.get(key) is not None, doc.get(key)),
+                    reverse=direction < 0,
+                )
         return self
 
     def skip(self, n: int) -> "FakeCursor":
@@ -96,11 +135,14 @@ class FakeCursor:
 class FakeCollection:
     def __init__(self):
         self._docs: list[dict] = []
+        self.indexes: list[tuple] = []
 
     def create_index(self, *args, **kwargs):
-        pass
+        self.indexes.append((args, kwargs))
 
     def insert_one(self, doc: dict) -> FakeInsertOneResult:
+        if "_id" in doc and any(existing.get("_id") == doc["_id"] for existing in self._docs):
+            raise DuplicateKeyError("duplicate key _id")
         if "_id" not in doc:
             doc["_id"] = ObjectId()
         self._docs.append(copy.deepcopy(doc))
@@ -119,13 +161,22 @@ class FakeCollection:
         return None
 
     def find_one_and_update(
-        self, query: dict, update: dict, return_document: bool = False
+        self, query: dict, update: dict, return_document: bool = False, upsert: bool = False, **kwargs
     ) -> Optional[dict]:
         for i, doc in enumerate(self._docs):
             if _matches_query(doc, query):
+                previous = copy.deepcopy(doc)
                 if "$set" in update:
                     self._docs[i].update(update["$set"])
-                return copy.deepcopy(self._docs[i]) if return_document else copy.deepcopy(doc)
+                return copy.deepcopy(self._docs[i]) if return_document else previous
+        if upsert:
+            new_doc = {**query, **update.get("$setOnInsert", {}), **update.get("$set", {})}
+            new_doc.pop("$setOnInsert", None)
+            new_doc.pop("$set", None)
+            if "_id" not in new_doc:
+                new_doc["_id"] = ObjectId()
+            self._docs.append(copy.deepcopy(new_doc))
+            return copy.deepcopy(new_doc)
         return None
 
     def count_documents(self, query: dict) -> int:
@@ -137,6 +188,11 @@ class FakeCollection:
                 self._docs.pop(i)
                 return FakeDeleteResult(1)
         return FakeDeleteResult(0)
+
+    def delete_many(self, query: dict) -> FakeDeleteResult:
+        before = len(self._docs)
+        self._docs = [doc for doc in self._docs if not _matches_query(doc, query)]
+        return FakeDeleteResult(before - len(self._docs))
 
 
 class FakeAdmin:
@@ -190,7 +246,7 @@ def make_client(fake_db):
     """
     def _make(db_fails: bool = False) -> TestClient:
         db = FakeDB(fail=db_fails) if db_fails else fake_db
-        app = create_app()
+        app = create_app(manage_database=False)
         app.dependency_overrides[get_db] = lambda: db
         return TestClient(app)
 
@@ -204,6 +260,6 @@ def client(fake_db) -> TestClient:
     Use this for tests that only need to call endpoints.
     Use make_client when you also need to inspect or pre-populate fake_db.
     """
-    app = create_app()
+    app = create_app(manage_database=False)
     app.dependency_overrides[get_db] = lambda: fake_db
     return TestClient(app)

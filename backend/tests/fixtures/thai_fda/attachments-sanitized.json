@@ -1,0 +1,21 @@
+{
+  "RESULT": null,
+  "LIST_ATTACH": [
+    {
+      "ATTACH_NM": "Official attachment",
+      "ATTACH_TYPE": "4",
+      "LIST_FILE_ATTACH": [
+        {
+          "ATTACH_FILE_NM_FAKE": "PUBLIC-ATTACHMENT-TEST.jpg",
+          "ATTACH_FILE_NM_ORIGINAL": "notice-image.jpg",
+          "ATTACH_DESCRIPTION": null
+        }
+      ]
+    },
+    {
+      "ATTACH_NM": "Unused category",
+      "ATTACH_TYPE": "3",
+      "LIST_FILE_ATTACH": []
+    }
+  ]
+}

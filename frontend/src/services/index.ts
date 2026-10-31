@@ -1,10 +1,11 @@
 // Runtime service selector.
-// VITE_USE_MOCK defaults to mock (any value other than "false").
+// Mock data is used only when VITE_USE_MOCK=true; API failures never fall back.
 // At build time Vite replaces the env string so tree-shaking still works.
 import * as mock from "./mock/index";
 import * as api  from "./api/index";
 
-const impl = (import.meta.env.VITE_USE_MOCK === "false" ? api : mock) as typeof mock;
+export const isMockData = import.meta.env.VITE_USE_MOCK === "true";
+const impl = (isMockData ? mock : api) as typeof mock;
 
 export const getProducts        = impl.getProducts;
 export const getProduct         = impl.getProduct;
@@ -21,6 +22,10 @@ export const runMatching        = impl.runMatching;
 export const getDashboardSummary = impl.getDashboardSummary;
 export const getRecentActivity  = impl.getRecentActivity;
 export const getAttentionItems  = impl.getAttentionItems;
+export const getSyncStatus      = impl.getSyncStatus;
+export const getSyncHistory     = impl.getSyncHistory;
+export const getSyncRun         = impl.getSyncRun;
+export const startThaiFdaSync   = impl.startThaiFdaSync;
 
 export const createProduct       = impl.createProduct;
 export const updateProduct       = impl.updateProduct;

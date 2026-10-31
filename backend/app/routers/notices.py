@@ -16,6 +16,7 @@ Optional query parameters (spec §7.5):
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
@@ -34,6 +35,9 @@ def list_notices(
     search: Optional[str] = Query(default=None, description="Substring search on product name or title"),
     notice_type: Optional[str] = Query(default=None, description="RECALL or WARNING"),
     registration_no: Optional[str] = Query(default=None, description="Filter by registration number"),
+    lot_number: Optional[str] = Query(default=None, description="Filter by affected LOT"),
+    published_from: Optional[date] = Query(default=None),
+    published_to: Optional[date] = Query(default=None),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     db: Database = Depends(get_db),
@@ -43,6 +47,9 @@ def list_notices(
         search=search,
         notice_type=notice_type,
         registration_no=registration_no,
+        lot_number=lot_number,
+        published_from=published_from,
+        published_to=published_to,
         skip=skip,
         limit=limit,
     )

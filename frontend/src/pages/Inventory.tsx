@@ -13,6 +13,7 @@ import { ProductForm } from "../components/inventory/ProductForm";
 import { formatThaiDate } from "../lib/th";
 import { useAsync } from "../hooks/useAsync";
 import * as svc from "../services";
+import { isMockData } from "../services";
 
 export default function Inventory() {
   const [search, setSearch] = useState("");
@@ -26,7 +27,7 @@ export default function Inventory() {
 
   return (
     <AppLayout title="คลังยา" breadcrumb={[{ label: "คลังยา", to: "/inventory" }]}
-      actions={<><DemoDataTag /><Button icon={<Plus className="h-4 w-4" />} onClick={() => setAddOpen(true)}>เพิ่มผลิตภัณฑ์</Button></>}>
+      actions={<>{isMockData && <DemoDataTag />}<Button icon={<Plus className="h-4 w-4" />} onClick={() => setAddOpen(true)}>เพิ่มผลิตภัณฑ์</Button></>}>
 
       {/* Search */}
       <div className="mb-5 max-w-sm">
@@ -56,7 +57,7 @@ export default function Inventory() {
                 <tbody className="divide-y divide-line">
                   {filtered.map((p) => (
                     <tr key={p._id} className="hover:bg-canvas-alt">
-                      <td className="px-5 py-3 font-medium">{p.brand_name}</td>
+                      <td className="px-5 py-3 font-medium">{p.brand_name}{p.data_origin === "demo" && <span className="ml-2 text-xs font-normal text-muted-strong">DEMO</span>}</td>
                       <td className="hidden px-5 py-3 text-muted-strong sm:table-cell">{p.generic_name ?? "—"}</td>
                       <td className="hidden px-5 py-3 text-muted-strong md:table-cell">{p.registration_no ?? <span className="italic">ไม่ระบุ</span>}</td>
                       <td className="hidden px-5 py-3 text-muted-strong lg:table-cell">{formatThaiDate(p.created_at)}</td>
