@@ -156,6 +156,12 @@ def test_match_action_activity_and_dashboard_api_flow(client, fake_db):
     assert activity_response.status_code == 200
     assert activity_response.json()["items"][0]["match_id"] == match["id"]
     assert client.get("/api/dashboard/summary").json()["pending_review"] == 0
+    activity_page = client.get("/api/activity", params={"skip": 0, "limit": 1})
+    assert activity_page.status_code == 200
+    assert activity_page.json()["total"] == 2
+    assert len(activity_page.json()["items"]) == 1
+    assert activity_page.json()["items"][0]["match_id"] == match["id"]
+    assert client.get("/api/dashboard/attention-items").json() == []
 
     rerun_response = client.post("/api/matches/run", json={"scope": "ALL"})
     assert rerun_response.status_code == 200

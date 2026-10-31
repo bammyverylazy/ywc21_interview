@@ -12,7 +12,7 @@ services:
       - key: DATABASE_NAME
         sync: false
       - key: FRONTEND_URL
-        sync: false
+        value: https://ywc21-interview.vercel.app
       - key: ENVIRONMENT
         value: production
       - key: FDA_SYNC_ENABLED
