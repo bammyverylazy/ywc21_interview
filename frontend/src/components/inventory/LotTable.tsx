@@ -7,6 +7,7 @@ import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { EmptyState } from "../feedback/EmptyState";
+import { DemoDataTag } from "../feedback/DemoDataTag";
 import { InventoryItemForm } from "./InventoryItemForm";
 import * as svc from "../../services";
 
@@ -47,7 +48,10 @@ export function LotTable({ product, items, onChanged }: Props) {
               <tbody className="divide-y divide-line">
                 {items.map((item) => (
                   <tr key={item._id} className="hover:bg-canvas-alt">
-                    <td className="px-4 py-3 font-medium">{item.lot_number ?? <span className="text-muted-strong">ไม่ระบุ</span>}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {item.lot_number ?? <span className="text-muted-strong">ไม่ระบุ</span>}
+                      {item.is_demo && <DemoDataTag className="ml-2 align-middle" />}
+                    </td>
                     <td className="px-4 py-3">{item.quantity} หน่วย</td>
                     <td className="px-4 py-3">{formatThaiDate(item.expiry_date)}</td>
                     <td className="px-4 py-3 text-muted-strong">{formatThaiDate(item.created_at)}</td>
